@@ -1,0 +1,887 @@
+openapi: 3.1.0
+info:
+  title: RadialMenu for Autodesk Revit
+  description: |
+    **RadialMenu** is a pyRevit-based extension for Autodesk Revit that provides a
+    Fusion 360-style circular shortcut menu triggered by holding right-click.
+
+    The menu features:
+    - 3-level nested radial petal layout (Level 1 → Level 2 → Level 3)
+    - Context-aware command filtering based on Revit selection and view type
+    - Drag-and-drop command reordering
+    - Built-in + pyRevit command integration
+    - Customizable themes, geometry, and layout via an in-app settings panel
+    - Persistent JSON configuration with automatic legacy migration
+
+    ## Architecture Overview
+
+    ```
+    RadialMenu.extension/
+    └── RadialMenu.tab/
+        └── RadialMenu.panel/
+            └── ToggleRadialMenu.pushbutton/
+                ├── script.py         # Main application logic (~3500 lines)
+                ├── ui.xaml           # WPF XAML layout (Canvas-based radial UI)
+                ├── bundle.yaml       # pyRevit bundle metadata
+                ├── radial_menu_config.json  # Persisted user configuration
+                ├── icon.png          # Ribbon icon
+                ├── on.png / off.png  # Toggle state icons
+                └── RadialMenu_debug.log     # Runtime debug log
+    ```
+
+    ## Runtime Lifecycle
+
+    1. **Toggle On**: User clicks the Ribbon button → `RadialMenuManager.start()`
+       installs a Win32 `WH_MOUSE` thread-local hook via `SetWindowsHookExW`.
+    2. **Hold Detection**: `hook_callback` detects `WM_RBUTTONDOWN`, starts a
+       background thread (`hold_detection_worker`) that waits for `hold_delay_ms`.
+    3. **Menu Open**: If the hold threshold is met, `trigger_radial_menu(x, y)` is
+       dispatched to the WPF UI thread. A `RadialMenuWindow` is created, positioned
+       at cursor coordinates, and shown as a modeless WPF window.
+    4. **Command Execution**: On petal click, `execute_command()` is called via
+       the Revit `IExternalEventHandler` pattern for thread-safe API access.
+    5. **Toggle Off**: User clicks the Ribbon button again → `RadialMenuManager.stop()`
+       removes the hook and closes the window.
+
+    ## Customizer Mode
+
+    Activated by **Shift+Click** on the Ribbon button or by clicking the ⚙ core
+    button. Provides:
+    - **Command Pool Tab**: Add, edit, delete, reorder commands. Set level, parent,
+      priority, and context rules per command.
+    - **Appearance Tab**: Adjust geometry (core radius, petal width, ring gap, sector
+      gap), hold delay, theme selection, and custom hex colors.
+
+  version: 2.0.0
+  contact:
+    name: SKREP Development
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+
+servers:
+  - url: file://localhost
+    description: Local file system — configuration is stored alongside the script.
+
+tags:
+  - name: Configuration
+    description: JSON configuration file schema and persistence.
+  - name: Commands
+    description: Command pool items and execution.
+  - name: Settings
+    description: Appearance, geometry, and behavior settings.
+  - name: Themes
+    description: Built-in color theme presets.
+  - name: Context
+    description: Revit context detection and filtering.
+  - name: UI
+    description: WPF window, radial geometry, and customizer panel.
+  - name: Lifecycle
+    description: Extension startup, hook management, and shutdown.
+
+paths:
+  /config/load:
+    get:
+      operationId: loadConfig
+      summary: Load configuration from disk
+      description: |
+        Reads `radial_menu_config.json` from the pushbutton directory.
+        Handles three legacy formats and migrates them automatically:
+        1. **Flat array** (`list` at root) → migrated via `migrate_old_config`
+        2. **Context-based dict** (`{"contexts": {...}}`) → migrated to pool format
+        3. **Current format** (`{"settings": {...}, "command_pool": [...]}`) → used as-is
+
+        Missing settings keys are merged from `DEFAULT_SETTINGS`.
+        Missing or empty `command_pool` falls back to `DEFAULT_POOL`.
+      tags: [Configuration]
+      responses:
+        "200":
+          description: Successfully loaded and optionally migrated configuration.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigFile"
+
+  /config/save:
+    post:
+      operationId: saveConfig
+      summary: Save configuration to disk
+      description: |
+        Writes the full configuration object to `radial_menu_config.json`
+        as UTF-8 encoded JSON with 4-space indentation.
+      tags: [Configuration]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfigFile"
+      responses:
+        "200":
+          description: Configuration saved successfully.
+
+  /commands/execute:
+    post:
+      operationId: executeCommand
+      summary: Execute a Revit command
+      description: |
+        Dispatches a command to the Revit API via `IExternalEventHandler`.
+        Supports two command types:
+        - `built_in`: Native Revit commands (zoom, save, 3d, reveal, etc.)
+        - `pyrevit`: pyRevit script commands identified by unique_id
+
+        Built-in commands use `PostableCommand`, `RevitCommandId`, or direct
+        API calls depending on availability.
+      tags: [Commands]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cmd_type, cmd_value]
+              properties:
+                cmd_type:
+                  $ref: "#/components/schemas/CommandType"
+                cmd_value:
+                  type: string
+                  description: |
+                    For `built_in`: one of the built-in command identifiers.
+                    For `pyrevit`: the unique_id of the pyRevit command.
+                  examples:
+                    - zoom
+                    - save
+                    - 3d
+      responses:
+        "200":
+          description: Command executed successfully.
+        "500":
+          description: Command execution failed (logged to debug file).
+
+  /context/detect:
+    get:
+      operationId: getCurrentContext
+      summary: Detect current Revit selection context
+      description: |
+        Inspects the active Revit document's selection to determine the
+        current editing context. Uses `BuiltInCategory` integer IDs with
+        enum fallback for robustness.
+
+        ### Category ID Mapping
+        | Category         | Integer ID  | Context String |
+        |------------------|-------------|----------------|
+        | OST_PipeCurves   | -2008065    | `pipes`        |
+        | OST_DuctCurves   | -2008130    | `ducts`        |
+        | OST_Walls        | -2000011    | `walls`        |
+        | OST_Dimensions   | -2000021    | `dimensions`   |
+        | (other/none)     | —           | `default`      |
+      tags: [Context]
+      responses:
+        "200":
+          description: Context string resolved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContextString"
+
+  /context/filter:
+    post:
+      operationId: filterPoolByContext
+      summary: Filter command pool by current context
+      description: |
+        Applies `context_rules` filtering to the command pool.
+        Commands with empty `context_rules` are always visible.
+
+        ### Filter Logic
+        1. **allowed_views**: If specified, the current view type must match
+           one of: `3D`, `Plan`, `Sheet`. View matching is case-insensitive.
+        2. **allowed_classes**: Reserved for element class-based filtering
+           (e.g., show command only when Walls are selected).
+        3. **No rules**: Command is always included.
+      tags: [Context]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pool:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/PoolItem"
+                context:
+                  $ref: "#/components/schemas/ContextString"
+      responses:
+        "200":
+          description: Filtered pool returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PoolItem"
+
+  /ui/geometry/update:
+    post:
+      operationId: updateRadialGeometry
+      summary: Recalculate and apply radial petal geometry
+      description: |
+        Computes WPF `Path.Data` strings for all visible petals using the
+        parallel-offset gap algorithm (`get_sector_path_parallel`).
+
+        ### Geometry Model
+        ```
+        Canvas center: (320, 320) — fixed 640×640 canvas
+
+        Level 1 ring:
+          r_inner = core_radius + ring_gap
+          r_outer = r_inner + petal_width
+          sectors = n1 (full 360°)
+
+        Level 2 ring:
+          r_inner = L1_r_outer + ring_gap
+          r_outer = r_inner + petal_width
+          sectors = max(n2, ceil(360 / l2_max_angle))
+
+        Level 3 ring:
+          r_inner = L2_r_outer + ring_gap
+          r_outer = r_inner + petal_width
+          sectors = max(n3, ceil(360 / l3_max_angle))
+        ```
+
+        ### Max Angle Clamping
+        For L2/L3, if the natural petal span (`360/n`) exceeds `lN_max_angle`,
+        a virtual sector count is computed to shrink each petal. This prevents
+        2-3 petals from stretching across the full circle.
+
+        ### Core Button Geometry
+        - **Normal Mode**: 2 sectors (⚙ Settings at 180°, ✕ Close at 0°)
+        - **Settings Mode**: 4 sectors (Move=225°, Pool=315°, Appearance=45°, Exit=135°)
+      tags: [UI]
+      responses:
+        "200":
+          description: Geometry updated and applied to WPF elements.
+
+  /lifecycle/start:
+    post:
+      operationId: startManager
+      summary: Start RadialMenuManager (install mouse hook)
+      description: |
+        Creates a `RadialMenuManager` instance, captures the WPF Dispatcher,
+        and installs a Win32 `WH_MOUSE` (type 7) thread-local hook via
+        `SetWindowsHookExW`.
+
+        The hook is registered for the Revit main thread ID obtained from
+        `AppDomain.CurrentDomain.GetData("Autodesk.Revit.UI.UIApplication")`.
+
+        The manager is stored in `AppDomain.CurrentDomain.SetData("RevitRadialMenuHook", manager)`
+        for singleton toggle behavior.
+      tags: [Lifecycle]
+      responses:
+        "200":
+          description: Hook installed, menu armed.
+        "500":
+          description: Hook installation failed (Win32 error logged).
+
+  /lifecycle/stop:
+    post:
+      operationId: stopManager
+      summary: Stop RadialMenuManager (remove mouse hook)
+      description: |
+        Calls `UnhookWindowsHookEx` to remove the mouse hook, cancels any
+        active hold detection, and closes the active window on the UI thread
+        via `Dispatcher.BeginInvoke`.
+      tags: [Lifecycle]
+      responses:
+        "200":
+          description: Hook removed, window closed, resources cleaned up.
+
+components:
+  schemas:
+
+    ConfigFile:
+      type: object
+      description: Root configuration file schema (`radial_menu_config.json`).
+      required: [settings, command_pool]
+      properties:
+        settings:
+          $ref: "#/components/schemas/Settings"
+        command_pool:
+          type: array
+          description: Flat list of all commands across all levels and parents.
+          items:
+            $ref: "#/components/schemas/PoolItem"
+
+    Settings:
+      type: object
+      description: Global appearance and behavior settings.
+      properties:
+        hold_delay_ms:
+          type: integer
+          default: 400
+          minimum: 100
+          maximum: 2000
+          description: |
+            Milliseconds to hold right-click before the menu opens.
+            Applied to the background hold detection thread.
+        gap_width:
+          type: number
+          format: float
+          default: 3.0
+          minimum: 0
+          maximum: 15
+          description: |
+            Width of the parallel-offset gap between adjacent petals (in pixels).
+            Computed using perpendicular offset vectors to create uniform gaps.
+        core_radius:
+          type: number
+          format: float
+          default: 45
+          minimum: 20
+          maximum: 120
+          description: Radius of the central core circle (in pixels).
+        petal_width:
+          type: number
+          format: float
+          default: 60
+          minimum: 25
+          maximum: 150
+          description: |
+            Radial width of each petal ring (r_outer - r_inner) in pixels.
+            Applies uniformly to all three levels.
+        ring_gap:
+          type: number
+          format: float
+          default: 5
+          minimum: 0
+          maximum: 20
+          description: |
+            Radial gap between concentric rings (L1→L2, L2→L3) in pixels.
+        theme:
+          type: string
+          default: pyRevit Dark
+          enum:
+            - pyRevit Dark
+            - Neon Fusion
+            - Classic Blue
+            - Forest Green
+            - Cyberpunk
+          description: |
+            Active color theme name. Overrides `color_*` fields with
+            preset values from the `THEMES` dictionary.
+        color_normal:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6,8}$"
+          default: "#F21E1E24"
+          description: |
+            ARGB hex color for petal normal (idle) state.
+            8-digit format: `#AARRGGBB`.
+        color_hover_start:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6,8}$"
+          default: "#FF0083B0"
+          description: Start color of the hover gradient (radial gradient).
+        color_hover_end:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6,8}$"
+          default: "#FF004B66"
+          description: End color of the hover gradient (radial gradient).
+        color_border:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6,8}$"
+          default: "#25FFFFFF"
+          description: Border/stroke color for petal outlines.
+        l2_max_angle:
+          type: number
+          format: float
+          default: 90
+          minimum: 30
+          maximum: 360
+          description: |
+            Maximum angular span (in degrees) for a single Level 2 petal.
+            If the natural span (360/n2) exceeds this value, a virtual
+            sector count is computed to clamp individual petals.
+        l3_max_angle:
+          type: number
+          format: float
+          default: 90
+          minimum: 30
+          maximum: 360
+          description: |
+            Maximum angular span (in degrees) for a single Level 3 petal.
+            Same clamping logic as `l2_max_angle`.
+
+    PoolItem:
+      type: object
+      description: |
+        A single command entry in the flat command pool.
+        Commands are organized by `level` and `parent` references,
+        forming a tree structure within a flat array.
+      required: [id, type, name, command, level, priority]
+      properties:
+        id:
+          type: string
+          description: |
+            Unique identifier for this command within the pool.
+            Generated from the command name via `clean_id_part()` (lowercase,
+            alphanumeric + underscore only). Collisions are resolved by
+            appending `_<slot>`.
+          examples:
+            - zoom_fit
+            - submenu1
+            - sub2_reveal
+        type:
+          $ref: "#/components/schemas/CommandType"
+        name:
+          type: string
+          maxLength: 20
+          description: |
+            Human-readable display name shown on the petal label.
+          examples:
+            - Zoom Fit
+            - Save Model
+            - Menu 1
+        command:
+          type: string
+          description: |
+            Command identifier for execution.
+            - For `built_in`: one of the predefined command strings.
+            - For `pyrevit`: the pyRevit script's `unique_id`.
+            - For submenus: `submenu1`, `submenu2`, etc.
+          examples:
+            - zoom
+            - save
+            - close_hidden
+            - 3d
+            - reveal
+            - thin_lines
+            - detail_level
+            - sync
+            - submenu1
+            - submenu2
+        icon:
+          type: string
+          description: |
+            Icon representation.
+            - For `built_in` commands: Unicode emoji string (e.g., `🔍`, `💾`).
+            - For `pyrevit` commands: absolute file path to a `.png` icon.
+              Themed icons are resolved via `resolve_themed_icon()` — if a
+              `.dark.png` variant exists, it is used in Revit Dark theme.
+          examples:
+            - "\U0001F50D"
+            - "\u274C"
+            - "C:/path/to/icon.png"
+        level:
+          type: integer
+          enum: [1, 2, 3]
+          description: |
+            Ring level in the radial menu:
+            - **1**: Inner ring (always full 360°)
+            - **2**: Middle ring (shown on L1 submenu hover)
+            - **3**: Outer ring (shown on L2 submenu hover)
+        parent:
+          type: string
+          nullable: true
+          description: |
+            The `id` of the parent submenu command.
+            - `null` for Level 1 commands.
+            - Parent `id` for Level 2/3 commands (e.g., `"submenu1"`).
+          examples:
+            - null
+            - submenu1
+            - submenu2
+        priority:
+          type: integer
+          minimum: 0
+          description: |
+            Sort priority within the level. Lower values appear first
+            (clockwise from 12 o'clock / 270°). Commands are sorted
+            ascending by priority within each level group.
+          examples:
+            - 10
+            - 20
+            - 30
+        context_rules:
+          $ref: "#/components/schemas/ContextRules"
+
+    ContextRules:
+      type: object
+      description: |
+        Context-based visibility rules for a command.
+        Empty object `{}` means the command is always visible.
+      properties:
+        allowed_views:
+          type: array
+          items:
+            type: string
+            enum: [3D, Plan, Sheet]
+          description: |
+            List of view types where this command is visible.
+            Matching is case-insensitive substring-based:
+            - `3D` matches views containing "3d"
+            - `Plan` matches views containing "plan" or "section"
+            - `Sheet` matches views containing "sheet"
+        allowed_classes:
+          type: array
+          items:
+            type: string
+          description: |
+            List of Revit element class names (e.g., `Wall`, `Pipe`,
+            `FamilyInstance`) that must be in the current selection
+            for this command to be visible.
+
+    CommandType:
+      type: string
+      enum:
+        - built_in
+        - pyrevit
+      description: |
+        Type discriminator for command execution routing:
+        - `built_in`: Executed via Revit PostableCommand / direct API calls.
+        - `pyrevit`: Executed via `pyrevit.loader.sessionmgr.execute_command()`.
+
+    ContextString:
+      type: string
+      enum:
+        - default
+        - pipes
+        - ducts
+        - walls
+        - dimensions
+      description: |
+        Resolved Revit selection context identifier.
+        Determined by the `BuiltInCategory` of the first selected element.
+
+    ThemePreset:
+      type: object
+      description: A color theme preset definition.
+      required: [color_normal, color_hover_start, color_hover_end, color_border]
+      properties:
+        color_normal:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{8}$"
+        color_hover_start:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{8}$"
+        color_hover_end:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{8}$"
+        color_border:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{8}$"
+
+    BuiltInCommands:
+      type: string
+      description: |
+        Enumeration of all supported built-in command identifiers
+        and their Revit API mappings.
+      enum:
+        - zoom
+        - close_hidden
+        - sync
+        - save
+        - 3d
+        - reveal
+        - thin_lines
+        - detail_level
+        - submenu1
+        - submenu2
+
+    TreeItem:
+      type: object
+      description: |
+        Hierarchical tree node for the pyRevit command picker UI.
+        Represents either a folder (tab/panel) or a command button.
+      properties:
+        name:
+          type: string
+          description: Display name of the tree node.
+        is_command:
+          type: boolean
+          description: True if this node represents an executable command.
+        icon_path:
+          type: string
+          nullable: true
+          description: Absolute path to the command's icon file.
+        unique_id:
+          type: string
+          nullable: true
+          description: pyRevit unique command identifier.
+        extension:
+          type: string
+          nullable: true
+          description: Parent extension name.
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/TreeItem"
+
+    PoolListItem:
+      type: object
+      description: |
+        WPF-bindable wrapper around a `PoolItem` dictionary.
+        Exposes CLR-property-style accessors for data binding in
+        the Customizer panel's ListBox.
+      properties:
+        Icon:
+          type: string
+          description: Emoji or icon path from the underlying pool item.
+        DisplayName:
+          type: string
+          description: Human-readable command name.
+        ContextSummary:
+          type: string
+          description: |
+            Formatted summary of context rules.
+            Returns "Always visible" if no rules are set.
+        LevelLabel:
+          type: string
+          description: "Formatted level label, e.g., `L1`, `L2`, `L3`."
+        PriorityLabel:
+          type: string
+          description: "Formatted priority label, e.g., `P: 10`."
+
+    ClassItem:
+      type: object
+      description: |
+        Checkbox item for the context rules dialog.
+        Represents a Revit element class that can be toggled
+        on/off for `allowed_classes` filtering.
+      properties:
+        Name:
+          type: string
+          description: Revit class name (e.g., `Wall`, `Pipe`).
+        IsChecked:
+          type: boolean
+          description: Whether this class is included in the filter.
+
+  # ─────────────────────────────────────────────────────────
+  # x-extensions: Internal architecture documentation
+  # ─────────────────────────────────────────────────────────
+
+x-internal-classes:
+  RadialMenuWindow:
+    description: |
+      Main WPF Window subclass. Manages the entire radial menu UI lifecycle.
+    inherits: System.Windows.Window
+    constructor:
+      parameters:
+        - name: xaml_path
+          type: string
+          description: Absolute path to `ui.xaml`.
+        - name: active_context
+          type: string
+          default: "default"
+          description: Revit context string for command filtering.
+    key_properties:
+      - name: customizer_mode
+        type: boolean
+        description: Whether the settings panel is active.
+      - name: _command_pool
+        type: "list[PoolItem]"
+        description: Full unfiltered command pool.
+      - name: _filtered_pool
+        type: "list[PoolItem]"
+        description: Context-filtered command pool for display.
+      - name: _button_to_pool_item
+        type: "dict[str, PoolItem]"
+        description: Maps WPF button names to pool item dicts.
+      - name: _level_counts
+        type: "tuple(int, int, int)"
+        description: Number of visible petals per level (L1, L2, L3).
+      - name: _move_mode_active
+        type: boolean
+        description: Drag-to-reposition mode for the window.
+
+  RadialMenuManager:
+    description: |
+      Singleton manager controlling the Win32 mouse hook lifecycle.
+      Stored in `AppDomain.CurrentDomain` for persistence across
+      pyRevit button toggles.
+    methods:
+      - name: start
+        description: Install WH_MOUSE hook and capture Dispatcher.
+      - name: stop
+        description: Remove hook, cancel holds, close window.
+
+  RevitEventHandler:
+    description: |
+      `IExternalEventHandler` implementation for thread-safe Revit API calls.
+      Commands are queued via `set_action()` and executed in `Execute()`.
+    inherits: Autodesk.Revit.UI.IExternalEventHandler
+
+  ContextRulesDialog:
+    description: |
+      Modal WPF dialog for editing per-command context rules.
+      Features a filterable checkbox list of Revit element classes
+      and view type toggles.
+    inherits: System.Windows.Window
+
+x-built-in-commands-reference:
+  zoom:
+    revit_api: UIView.ZoomToFit()
+    description: Zoom to fit the active view.
+  close_hidden:
+    revit_api: PostableCommand.CloseInactiveViews
+    fallback: Manual UIView.Close() loop
+    description: Close all inactive/hidden views.
+  sync:
+    revit_api: PostableCommand.SynchronizeWithCentral
+    fallback: Document.SynchronizeWithCentral() direct call
+    description: Sync workshared model to central.
+  save:
+    revit_api: PostableCommand.Save
+    description: Save the active document.
+  3d:
+    revit_api: RevitCommandId("ID_VIEW_DEFAULT_3DVIEW")
+    description: Open/switch to the default 3D view.
+  reveal:
+    revit_api: RevitCommandId("ID_VIEW_REVEAL_HIDDEN")
+    description: Toggle Reveal Hidden Elements mode.
+  thin_lines:
+    revit_api: RevitCommandId("ID_VIEW_THIN_LINES")
+    description: Toggle Thin Lines display mode.
+  detail_level:
+    revit_api: Transaction → ViewDetailLevel cycle
+    description: Cycle detail level (Coarse → Medium → Fine → Coarse).
+
+x-theme-presets:
+  pyRevit Dark:
+    color_normal: "#F21E1E24"
+    color_hover_start: "#FF0083B0"
+    color_hover_end: "#FF004B66"
+    color_border: "#25FFFFFF"
+  Neon Fusion:
+    color_normal: "#F21F1F24"
+    color_hover_start: "#FFFF4E50"
+    color_hover_end: "#FFF9D423"
+    color_border: "#35FFFFFF"
+  Classic Blue:
+    color_normal: "#F21C263B"
+    color_hover_start: "#FF0088CC"
+    color_hover_end: "#FF0044AA"
+    color_border: "#30FFFFFF"
+  Forest Green:
+    color_normal: "#F2192B1D"
+    color_hover_start: "#FF0F7050"
+    color_hover_end: "#FF1B4D22"
+    color_border: "#25FFFFFF"
+  Cyberpunk:
+    color_normal: "#F225122B"
+    color_hover_start: "#FFC51083"
+    color_hover_end: "#FF5F1BBF"
+    color_border: "#35FFFFFF"
+
+x-geometry-algorithm:
+  description: |
+    ## Parallel-Offset Gap Algorithm
+
+    The `get_sector_path_parallel` method computes petal shapes as WPF Path
+    geometry strings using a parallel-offset approach for uniform gaps:
+
+    1. Calculate sector boundary angles: `θ₁ = center - span/2`, `θ₂ = center + span/2`
+    2. Compute radial unit vectors `d₁`, `d₂` for each boundary
+    3. Compute perpendicular normals `n₁`, `n₂` pointing inward
+    4. Offset each boundary by `gap_width/2` along its normal
+    5. Solve intersection with inner/outer circles: `t = √(r² - offset²)`
+    6. Generate 4 corner points and connect with lines and arcs
+
+    The formula produces:
+    ```
+    p_in1  = center + offset·n₁ + t_in·d₁    (inner arc, boundary 1)
+    p_out1 = center + offset·n₁ + t_out·d₁   (outer arc, boundary 1)
+    p_in2  = center + offset·n₂ + t_in·d₂    (inner arc, boundary 2)
+    p_out2 = center + offset·n₂ + t_out·d₂   (outer arc, boundary 2)
+    ```
+
+    WPF Path: `M p_in1 L p_out1 A r_out 0 0,1 p_out2 L p_in2 A r_in 0 0,0 p_in1 Z`
+
+x-legacy-migration:
+  description: |
+    ## Configuration Migration
+
+    The `load_config()` function handles three legacy formats:
+
+    ### Format 1: Flat Array (v0.x)
+    ```json
+    [
+      {"slot": 1, "type": "built_in", "name": "Zoom", "command": "zoom", "icon": "🔍"},
+      ...
+    ]
+    ```
+    Migrated by wrapping in `{"contexts": {"default": [...]}}` and calling
+    `migrate_old_config()`.
+
+    ### Format 2: Context Dictionary (v1.x)
+    ```json
+    {
+      "settings": {...},
+      "contexts": {
+        "default": [...slots...],
+        "pipes": [...slots...]
+      }
+    }
+    ```
+    Migrated by extracting the `default` context (or first non-empty),
+    converting slot numbers to level/parent/priority, and building a
+    flat `command_pool`.
+
+    ### Format 3: Current Pool Format (v2.x)
+    ```json
+    {
+      "settings": {...},
+      "command_pool": [
+        {"id": "...", "level": 1, "parent": null, "priority": 10, ...}
+      ]
+    }
+    ```
+
+    ### Slot-to-Level Mapping (Legacy)
+    | Slot Range | Level | Parent    |
+    |------------|-------|-----------|
+    | 1–10       | 1     | null      |
+    | 11–20      | 2     | submenu1  |
+    | 21–30      | 3     | submenu2  |
+
+x-event-flow:
+  mouse-hook:
+    description: |
+      ## Win32 Mouse Hook Event Flow
+
+      ```
+      WM_RBUTTONDOWN (0x0204)
+        → Record cursor position
+        → Set _is_holding = True
+        → Increment _hold_id_counter
+        → Spawn hold_detection_worker thread
+
+      hold_detection_worker:
+        → sleep(hold_delay_ms / 1000)
+        → Check _is_holding && _hold_id_counter match
+        → If valid: trigger_radial_menu(x, y)
+
+      WM_RBUTTONUP (0x0205)
+        → Set _is_holding = False
+        → Cancel pending hold if menu not opened
+
+      WM_MOUSEMOVE (0x0200)
+        → If holding: check movement threshold
+        → If moved > 10px: cancel hold
+      ```
+
+  command-execution:
+    description: |
+      ## Command Execution Flow
+
+      ```
+      User clicks petal
+        → on_button_clicked_dynamic(sender, args)
+        → on_slot_clicked(slot_num)
+        → Look up pool item from _button_to_pool_item
+        → If submenu command: toggle_level2() / toggle_level3()
+        → If executable: _event_handler.set_action(execute_command, type, value)
+        → _ext_event.Raise()
+        → Revit calls Execute() on main thread
+        → execute_command(uiapp, cmd_type, cmd_value)
+        → Close menu window
+      ```

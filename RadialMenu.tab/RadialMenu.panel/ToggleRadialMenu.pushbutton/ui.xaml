@@ -1,0 +1,1415 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Radial Menu"
+        Height="640" Width="640"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="Manual">
+
+    <Window.Resources>
+        <!-- Dynamic color resources -->
+        <Color x:Key="NormalColor">#F21E1E24</Color>
+        <Color x:Key="BorderColor">#25FFFFFF</Color>
+        <Color x:Key="HoverStartColor">#FF00E5FF</Color>
+        <Color x:Key="HoverEndColor">#FF0083B0</Color>
+        <SolidColorBrush x:Key="HoverTextColor" Color="White"/>
+
+        <!-- Ring Sector Button Style -->
+        <Style x:Key="SectorButtonStyle" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Width" Value="640"/>
+            <Setter Property="Height" Value="640"/>
+            <Setter Property="Canvas.Left" Value="0"/>
+            <Setter Property="Canvas.Top" Value="0"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <SolidColorBrush Color="{DynamicResource NormalColor}"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="BorderBrush">
+                <Setter.Value>
+                    <SolidColorBrush Color="{DynamicResource BorderColor}"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="BorderThickness" Value="1.2"/>
+            <Setter Property="Foreground" Value="#EEEEEE"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+            <Setter Property="RenderTransform">
+                <Setter.Value>
+                    <ScaleTransform ScaleX="1.0" ScaleY="1.0"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Canvas Background="{x:Null}" Width="640" Height="640">
+                            <!-- Main Sector Path -->
+                            <Path x:Name="SectorPath" 
+                                  Data="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" 
+                                  Fill="{TemplateBinding Background}" 
+                                  Stroke="{TemplateBinding BorderBrush}" 
+                                  StrokeThickness="{TemplateBinding BorderThickness}">
+                                
+                            </Path>
+
+                            <!-- Highlight Path visible on hover -->
+                            <Path x:Name="HighlightPath" 
+                                  Data="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" 
+                                  Opacity="0.0" 
+                                  IsHitTestVisible="False">
+                                <Path.Fill>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="{DynamicResource HoverStartColor}" Offset="0"/>
+                                        <GradientStop Color="{DynamicResource HoverEndColor}" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Path.Fill>
+                            </Path>
+                            
+                            <!-- ContentPresenter for children -->
+                            <ContentPresenter/>
+                        </Canvas>
+                        
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource HoverTextColor}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <!-- Smooth scale-out slide radial animation -->
+                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="1.06" Duration="0:0:0.22">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="1.06" Duration="0:0:0.22">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <!-- Smooth fade-in of Highlight and Glow -->
+                                            <DoubleAnimation Storyboard.TargetName="HighlightPath"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="1.0" Duration="0:0:0.18">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <!-- Smooth scale-back animation -->
+                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="1.0" Duration="0:0:0.18">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="1.0" Duration="0:0:0.18">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <!-- Smooth fade-out of Highlight and Glow -->
+                                            <DoubleAnimation Storyboard.TargetName="HighlightPath"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0.0" Duration="0:0:0.15">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="HighlightPath" Property="Fill" Value="#FF005C7A"/>
+                                <Setter TargetName="HighlightPath" Property="Opacity" Value="0.95"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Central Mini Circle Button Style -->
+        <Style x:Key="MiniCircleButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#FF3E3E42"/>
+            <Setter Property="Foreground" Value="#EEEEEE"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Ellipse x:Name="Bg" Fill="{TemplateBinding Background}"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Smooth fade-in hover label style (always visible but highlights on hover) -->
+                <!-- TextBlock style for radial labels (inside border) -->
+        <Style x:Key="LabelTextStyle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI, Inter, Arial"/>
+            <Setter Property="FontSize" Value="9.0"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Rounded pill (sausage) border style for labels with hover delay -->
+        <Style x:Key="LabelBorderStyle" TargetType="Border">
+            <Setter Property="Opacity" Value="0.0"/>
+            <Setter Property="Background" Value="#F018181F"/>
+            <Setter Property="BorderBrush" Value="#30FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="7,3,7,3"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,2,0,0"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <!-- 0.4s delay before showing the label, then fade in -->
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" 
+                                                 To="1.0" 
+                                                 Duration="0:0:0.2" 
+                                                 BeginTime="0:0:0.4">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseOut"/>
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <!-- Disappear quickly without delay on mouse leave -->
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" 
+                                                 To="0.0" 
+                                                 Duration="0:0:0.1">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseOut"/>
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        
+        <!-- Core Sector Button Style -->
+        <Style x:Key="CoreButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="640"/>
+            <Setter Property="Height" Value="640"/>
+            <Setter Property="Canvas.Left" Value="0"/>
+            <Setter Property="Canvas.Top" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="#40FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="#EEEEEE"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+            <Setter Property="RenderTransform">
+                <Setter.Value>
+                    <ScaleTransform ScaleX="1.0" ScaleY="1.0"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Canvas Background="{x:Null}" Width="640" Height="640">
+                            <!-- Main Sector Path -->
+                            <Path x:Name="SectorPath" 
+                                  Data="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" 
+                                  Fill="{TemplateBinding Background}" 
+                                  Stroke="{TemplateBinding BorderBrush}" 
+                                  StrokeThickness="{TemplateBinding BorderThickness}">
+                                
+                            </Path>
+                            <ContentPresenter/>
+                        </Canvas>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SectorPath" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="SectorPath" Property="Opacity" Value="0.6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Name="MainGrid">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="640"/>
+            <ColumnDefinition Name="CustomizerColumn" Width="0"/>
+        </Grid.ColumnDefinitions>
+        
+        <!-- Left Pane: Radial Canvas (Column 0) -->
+        <Canvas Grid.Column="0" Width="640" Height="640" HorizontalAlignment="Center" VerticalAlignment="Center">
+            
+            <!-- Level 1 Template Buttons (1 to 10) -->
+            <Button Name="BtnL1_1" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnL1_1Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                        <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                            <Image Name="BtnL1_1Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                            <TextBlock Name="BtnL1_1Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Name="BtnL1_1LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL1_1Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+            <Button Name="BtnL1_2" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnL1_2Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                        <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                            <Image Name="BtnL1_2Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                            <TextBlock Name="BtnL1_2Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Name="BtnL1_2LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL1_2Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+            <Button Name="BtnL1_3" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnL1_3Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                        <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                            <Image Name="BtnL1_3Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                            <TextBlock Name="BtnL1_3Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Name="BtnL1_3LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL1_3Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+            <Button Name="BtnL1_4" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnL1_4Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                        <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                            <Image Name="BtnL1_4Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                            <TextBlock Name="BtnL1_4Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Name="BtnL1_4LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL1_4Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+            <Button Name="BtnL1_5" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnL1_5Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                        <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                            <Image Name="BtnL1_5Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                            <TextBlock Name="BtnL1_5Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Name="BtnL1_5LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL1_5Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+            <Button Name="BtnL1_6" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnL1_6Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                        <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                            <Image Name="BtnL1_6Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                            <TextBlock Name="BtnL1_6Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Name="BtnL1_6LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL1_6Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+            <Button Name="BtnL1_7" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnL1_7Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                        <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                            <Image Name="BtnL1_7Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                            <TextBlock Name="BtnL1_7Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Name="BtnL1_7LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL1_7Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+            <Button Name="BtnL1_8" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnL1_8Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                        <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                            <Image Name="BtnL1_8Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                            <TextBlock Name="BtnL1_8Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Name="BtnL1_8LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL1_8Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+            <Button Name="BtnL1_9" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnL1_9Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                        <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                            <Image Name="BtnL1_9Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                            <TextBlock Name="BtnL1_9Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Name="BtnL1_9LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL1_9Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+            <Button Name="BtnL1_10" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnL1_10Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                        <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                            <Image Name="BtnL1_10Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                            <TextBlock Name="BtnL1_10Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Name="BtnL1_10LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL1_10Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+
+            <!-- ================= SUBMENU LEVEL 2 ================= -->
+            <Canvas Name="SubMenuLevel2" Width="640" Height="640" Visibility="Collapsed" Opacity="0">
+                <Button Name="BtnL2_1" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL2_1Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL2_1Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL2_1Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL2_1LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL2_1Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL2_2" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL2_2Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL2_2Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL2_2Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL2_2LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL2_2Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL2_3" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL2_3Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL2_3Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL2_3Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL2_3LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL2_3Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL2_4" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL2_4Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL2_4Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL2_4Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL2_4LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL2_4Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL2_5" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL2_5Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL2_5Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL2_5Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL2_5LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL2_5Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL2_6" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL2_6Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL2_6Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL2_6Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL2_6LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL2_6Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL2_7" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL2_7Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL2_7Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL2_7Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL2_7LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL2_7Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL2_8" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL2_8Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL2_8Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL2_8Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL2_8LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL2_8Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL2_9" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL2_9Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL2_9Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL2_9Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL2_9LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL2_9Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL2_10" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL2_10Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL2_10Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL2_10Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL2_10LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL2_10Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+            </Canvas>
+
+            <!-- ================= SUBMENU LEVEL 3 ================= -->
+            <Canvas Name="SubMenuLevel3" Width="640" Height="640" Visibility="Collapsed" Opacity="0">
+                <Button Name="BtnL3_1" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL3_1Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL3_1Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL3_1Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL3_1LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL3_1Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL3_2" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL3_2Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL3_2Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL3_2Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL3_2LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL3_2Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL3_3" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL3_3Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL3_3Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL3_3Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL3_3LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL3_3Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL3_4" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL3_4Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL3_4Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL3_4Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL3_4LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL3_4Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL3_5" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL3_5Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL3_5Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL3_5Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL3_5LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL3_5Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL3_6" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL3_6Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL3_6Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL3_6Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL3_6LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL3_6Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL3_7" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL3_7Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL3_7Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL3_7Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL3_7LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL3_7Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL3_8" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL3_8Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL3_8Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL3_8Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL3_8LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL3_8Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL3_9" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL3_9Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL3_9Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL3_9Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL3_9LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL3_9Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+                <Button Name="BtnL3_10" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+                    <Canvas Width="640" Height="640">
+                        <StackPanel Name="BtnL3_10Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
+                            <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                <Image Name="BtnL3_10Image" Stretch="Uniform" Width="22" Height="22" Visibility="Collapsed"/>
+                                <TextBlock Name="BtnL3_10Emoji" Text="" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Border Name="BtnL3_10LabelBorder" Style="{StaticResource LabelBorderStyle}">
+                            <TextBlock Name="BtnL3_10Label" Text="" Style="{StaticResource LabelTextStyle}"/>
+                        </Border>
+                        </StackPanel>
+                    </Canvas>
+                </Button>
+            </Canvas>
+
+            <!-- Central Volume Circle Background Plate -->
+            <Border Name="CenterCoreBg" Width="90" Height="90" 
+                    Canvas.Left="275" Canvas.Top="275" 
+                    CornerRadius="45" 
+                    BorderThickness="1.5">
+                <Border.Background>
+                    <RadialGradientBrush Center="0.5,0.5" GradientOrigin="0.5,0.3">
+                        <GradientStop Color="#FF303035" Offset="0"/>
+                        <GradientStop Color="#FF141419" Offset="1"/>
+                    </RadialGradientBrush>
+                </Border.Background>
+                <Border.BorderBrush>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#50FFFFFF" Offset="0"/>
+                        <GradientStop Color="#15FFFFFF" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.BorderBrush>
+                <Border.Effect>
+                    <DropShadowEffect Color="#000000" BlurRadius="15" ShadowDepth="3" Opacity="0.6"/>
+                </Border.Effect>
+            </Border>
+
+            <!-- ================= CORE BUTTONS (NORMAL MODE) ================= -->
+            <Button Name="BtnCoreClose" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnCoreClosePanel" Width="50" Height="40" VerticalAlignment="Center">
+                        <TextBlock Text="✕" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Close" Foreground="White" FontSize="8.5" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+            <Button Name="BtnCoreSettings" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnCoreSettingsPanel" Width="50" Height="40" VerticalAlignment="Center">
+                        <TextBlock Text="⚙" Foreground="White" FontSize="12" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Setup" Foreground="White" FontSize="8.5" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+
+            <!-- ================= CORE BUTTONS (SETTINGS MODE) ================= -->
+            <Button Name="BtnCoreMove" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnCoreMovePanel" Width="50" Height="40" VerticalAlignment="Center">
+                        <TextBlock Text="✥" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Move" Foreground="White" FontSize="8.5" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+            <Button Name="BtnCorePool" Style="{StaticResource CoreButtonStyle}" Background="#FF4CAF50" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnCorePoolPanel" Width="50" Height="40" VerticalAlignment="Center">
+                        <TextBlock Text="📋" Foreground="White" FontSize="11" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Pool" Foreground="White" FontSize="8.5" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+            <Button Name="BtnCoreAppearance" Style="{StaticResource CoreButtonStyle}" Background="#FFFFC107" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnCoreAppearancePanel" Width="50" Height="40" VerticalAlignment="Center">
+                        <TextBlock Text="🎨" Foreground="Black" FontSize="11" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Look" Foreground="Black" FontSize="8.5" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+            <Button Name="BtnCoreExit" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935" Visibility="Collapsed">
+                <Canvas Width="640" Height="640">
+                    <StackPanel Name="BtnCoreExitPanel" Width="50" Height="40" VerticalAlignment="Center">
+                        <TextBlock Text="✕" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Exit" Foreground="White" FontSize="8.5" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Canvas>
+            </Button>
+
+        </Canvas>
+        
+        <Border Name="CustomizerBorder" Grid.Column="1" HorizontalAlignment="Stretch" Height="620" 
+                Margin="10" Padding="15" CornerRadius="15" Background="{DynamicResource CustomizerBg}" BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="1.2" Visibility="Collapsed"
+                UseLayoutRounding="True"
+                TextOptions.TextFormattingMode="Display"
+                TextOptions.TextRenderingMode="ClearType"
+                RenderOptions.ClearTypeHint="Enabled">
+            <Border.Effect>
+                <DropShadowEffect Color="#000000" BlurRadius="25" ShadowDepth="4" Opacity="0.6"/>
+            </Border.Effect>
+            
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/> <!-- Title -->
+                    <RowDefinition Height="*"/>    <!-- TabControl -->
+                </Grid.RowDefinitions>
+                
+                <TextBlock Grid.Row="0" Name="TxtPanelTitle" Text="Commands &amp; Structure" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource CustomizerText}" Margin="0,0,0,10" HorizontalAlignment="Center" Cursor="SizeAll"/>
+                
+                <TabControl Name="CustomizerTabControl" Grid.Row="1" Background="Transparent" BorderThickness="0" Margin="0">
+                    <TabControl.Resources>
+                        <!-- Hide TabItem Headers entirely for a cleaner segmented UI controlled by the core -->
+                        <Style TargetType="TabItem">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </Style>
+                    </TabControl.Resources>
+                    
+                    <!-- Tab 0: Command Pool -->
+                    <TabItem>
+                        <Grid Margin="0,5,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <!-- Left Column: Command List & Controls -->
+                            <Grid Grid.Column="0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/> <!-- Search Box -->
+                                    <RowDefinition Height="*"/>    <!-- Pool List -->
+                                    <RowDefinition Height="Auto"/> <!-- Add Buttons -->
+                                    <RowDefinition Height="Auto"/> <!-- Exit / Reset -->
+                                </Grid.RowDefinitions>
+                                
+                                <!-- Search Box -->
+                                <Grid Grid.Row="0" Margin="0,0,0,8">
+                                    <TextBox Name="PoolSearchBox" Height="26" Padding="5,2" 
+                                               Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" BorderThickness="1" 
+                                               VerticalContentAlignment="Center" FontSize="11"/>
+                                    <TextBlock IsHitTestVisible="False" Text="Search pool..." VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8,0,0,0" Foreground="{DynamicResource CustomizerSecText}" FontSize="11">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Text, ElementName=PoolSearchBox}" Value="">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                                
+                                <!-- Pool ListBox -->
+                                <ListBox Grid.Row="1" Name="PoolListBox" Background="Transparent" BorderThickness="0"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,0,4"
+                                         SelectionMode="Single">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="Padding" Value="0"/>
+                                            <Setter Property="Margin" Value="0,1,0,1"/>
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <Border x:Name="ItemBd" CornerRadius="4" Background="{TemplateBinding Background}" Padding="6,4">
+                                                            <ContentPresenter/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="ItemBd" Property="Background" Value="#15FFFFFF"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter TargetName="ItemBd" Property="Background" Value="#2500E5FF"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="22"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Icon}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                <StackPanel Grid.Column="1" Margin="4,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding DisplayName}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource CustomizerText}" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding ContextSummary}" FontSize="9" Foreground="{DynamicResource CustomizerSecText}" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" Text="{Binding LevelLabel}" FontSize="9" Foreground="{DynamicResource CustomizerSecText}" VerticalAlignment="Center" Margin="4,0,4,0"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding PriorityLabel}" FontSize="9" Foreground="{DynamicResource CustomizerHighlight}" VerticalAlignment="Center" FontWeight="Bold" MinWidth="20" TextAlignment="Right"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                
+                                <!-- Add Buttons -->
+                                <Grid Grid.Row="2" Margin="0,4,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button Name="BtnAddFromPyRevit" Grid.Column="0" Content="＋ pyRevit" Height="24" Margin="0,0,3,0"
+                                            Background="#FF4CAF50" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                    <Button Name="BtnAddBuiltIn" Grid.Column="1" Content="＋ Built-in" Height="24" Margin="3,0,3,0"
+                                            Background="#FF0083B0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                    <Button Name="BtnAddSubmenuPool" Grid.Column="2" Content="＋ Submenu" Height="24" Margin="3,0,0,0"
+                                            Background="#FF9C27B0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                </Grid>
+                                
+                                <!-- Exit / Reset -->
+                                <StackPanel Grid.Row="3" Margin="0,2,0,0">
+                                    <Grid Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Name="BtnExitCustomizer" Grid.Column="0" Content="Exit Settings" Height="24" Margin="0,0,3,0"
+                                                Background="#FF55555C" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                        <Button Name="BtnReset" Grid.Column="1" Content="Reset All" Height="24" Margin="3,0,0,0"
+                                                Background="#FFFF5722" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+                            
+                            <!-- Right Column: Edit Panel (shown when a pool item is selected) -->
+                            <Border Grid.Column="1" Name="PoolEditPanel" Visibility="Visible" IsEnabled="False" Width="285"
+                                    CornerRadius="6" Background="{DynamicResource CustomizerInputBg}" Padding="8" Margin="10,0,0,0" VerticalAlignment="Stretch">
+                                <StackPanel>
+                                    <TextBlock Name="TxtEditItemName" Text="Edit: Command Name" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource CustomizerText}" Margin="0,0,0,6"/>
+                                    
+                                    <!-- Command details fields -->
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="65"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Name:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10" VerticalAlignment="Center"/>
+                                        <TextBox Name="EditItemNameTxt" Grid.Column="1" Height="22" FontSize="10" Padding="4,1" VerticalContentAlignment="Center"
+                                                 Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}"/>
+                                    </Grid>
+                                    
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="65"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Command:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10" VerticalAlignment="Center"/>
+                                        <TextBox Name="EditItemCommandTxt" Grid.Column="1" Height="22" FontSize="10" Padding="4,1" VerticalContentAlignment="Center"
+                                                 Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}"/>
+                                    </Grid>
+                                    
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="65"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Icon/Emoji:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10" VerticalAlignment="Center"/>
+                                        <TextBox Name="EditItemIconTxt" Grid.Column="1" Height="22" FontSize="10" Padding="4,1" VerticalContentAlignment="Center"
+                                                 Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}"/>
+                                    </Grid>
+                                    
+                                    <!-- Level and Parent selectors -->
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Level:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                        <ComboBox Name="EditLevelCombo" Grid.Column="1" Height="22" FontSize="10" VerticalContentAlignment="Center"
+                                                  Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}">
+                                            <ComboBoxItem Content="L1 (Inner)"/>
+                                            <ComboBoxItem Content="L2 (Mid)"/>
+                                            <ComboBoxItem Content="L3 (Outer)"/>
+                                        </ComboBox>
+                                        <TextBlock Grid.Column="2" Text="Parent:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10" VerticalAlignment="Center" Margin="8,0,4,0"/>
+                                        <ComboBox Name="EditParentCombo" Grid.Column="3" Height="22" FontSize="10" VerticalContentAlignment="Center"
+                                                  Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}">
+                                            <ComboBoxItem Content="None (Root)"/>
+                                        </ComboBox>
+                                    </Grid>
+                                    
+                                    <!-- View type checkboxes -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                        <CheckBox Name="EditChkView3D" Content="3D" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="0,0,12,0"/>
+                                        <CheckBox Name="EditChkViewPlan" Content="Plans" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="0,0,12,0"/>
+                                        <CheckBox Name="EditChkViewSheet" Content="Sheets" Foreground="{DynamicResource CustomizerText}" FontSize="10"/>
+                                    </StackPanel>
+                                    
+                                    <!-- Class/Category search -->
+                                    <Grid Margin="0,0,0,4">
+                                        <TextBox Name="EditClassSearch" Height="20" FontSize="10" Padding="4,1"
+                                                 Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" 
+                                                 BorderBrush="{DynamicResource CustomizerSecText}" VerticalContentAlignment="Center"/>
+                                        <TextBlock IsHitTestVisible="False" Text="Search classes/categories..." VerticalAlignment="Center" HorizontalAlignment="Left" Margin="6,0,0,0" Foreground="{DynamicResource CustomizerSecText}" FontSize="10">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=EditClassSearch}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    
+                                    <ListBox Name="EditClassList" Height="320" Background="Transparent" BorderThickness="0"
+                                             ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,0,6">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="1"/>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                        <ListBox.GroupStyle>
+                                            <GroupStyle>
+                                                <GroupStyle.HeaderTemplate>
+                                                    <DataTemplate>
+                                                        <Border BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="0,0,0,1" Margin="0,4,0,2" Padding="0,2,0,4">
+                                                            <TextBlock Text="{Binding Name}" Foreground="{DynamicResource CustomizerSecText}" FontWeight="Bold" FontSize="10" />
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </GroupStyle.HeaderTemplate>
+                                            </GroupStyle>
+                                        </ListBox.GroupStyle>
+                                    </ListBox>
+                                    
+                                    <!-- Action buttons -->
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Name="BtnPoolItemSave" Grid.Column="0" Content="Save" Height="22" Margin="0,0,3,0"
+                                                Background="#FF0083B0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border CornerRadius="3" Background="{TemplateBinding Background}">
+                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                        <Button Name="BtnPoolItemDelete" Grid.Column="1" Content="Delete" Height="22" Margin="3,0,3,0"
+                                                Background="#FFFF5722" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border CornerRadius="3" Background="{TemplateBinding Background}">
+                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                        <Button Name="BtnPoolItemCancel" Grid.Column="2" Content="Cancel" Height="22" Margin="3,0,0,0"
+                                                Background="#FF55555C" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border CornerRadius="3" Background="{TemplateBinding Background}">
+                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </TabItem>
+                    
+                    <!-- Tab 1: Appearance Settings -->
+                    <TabItem>
+                        <ScrollViewer Background="Transparent" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,5,0,0" Height="460">
+                            <StackPanel Margin="0,0,10,0">
+                                <!-- Slider: Hold Delay -->
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="50"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Hold Delay:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                    <Slider Name="DelaySlider" Grid.Column="1" Minimum="200" Maximum="1000" Value="400" IsSnapToTickEnabled="True" TickFrequency="50" VerticalAlignment="Center"/>
+                                    <TextBlock Name="DelayValueText" Grid.Column="2" Text="400 ms" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                </Grid>
+                                
+                                <!-- Slider: Core Radius -->
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="50"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Core Radius:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                    <Slider Name="CoreRadiusSlider" Grid.Column="1" Minimum="30" Maximum="70" Value="45" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"/>
+                                    <TextBlock Name="CoreRadiusValueText" Grid.Column="2" Text="45 px" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                </Grid>
+                                
+                                <!-- Slider: Petal Width -->
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="50"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Petal Width:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                    <Slider Name="PetalWidthSlider" Grid.Column="1" Minimum="35" Maximum="90" Value="60" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"/>
+                                    <TextBlock Name="PetalWidthValueText" Grid.Column="2" Text="60 px" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                </Grid>
+                                
+                                <!-- Slider: Ring Spacing -->
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="50"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Ring Spacing:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                    <Slider Name="RingSpacingSlider" Grid.Column="1" Minimum="0" Maximum="15" Value="5" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"/>
+                                    <TextBlock Name="RingSpacingValueText" Grid.Column="2" Text="5 px" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                </Grid>
+                                
+                                <!-- Slider: Sector Spacing -->
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="50"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Sector Spacing:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                    <Slider Name="SectorSpacingSlider" Grid.Column="1" Minimum="0" Maximum="10" Value="3" IsSnapToTickEnabled="True" TickFrequency="0.5" VerticalAlignment="Center"/>
+                                    <TextBlock Name="SectorSpacingValueText" Grid.Column="2" Text="3.0 px" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                </Grid>
+                                
+                                <!-- Divider -->
+                                <Border BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="0,0,0,1" Margin="0,5,0,10"/>
+                                
+                                <!-- Slider: L2 Max Petal Angle -->
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="50"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="L2 Max Angle:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                    <Slider Name="L2MaxAngleSlider" Grid.Column="1" Minimum="30" Maximum="180" Value="90" IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center"/>
+                                    <TextBlock Name="L2MaxAngleValueText" Grid.Column="2" Text="90°" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                </Grid>
+                                
+                                <!-- Slider: L3 Max Petal Angle -->
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="50"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="L3 Max Angle:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                    <Slider Name="L3MaxAngleSlider" Grid.Column="1" Minimum="30" Maximum="180" Value="90" IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center"/>
+                                    <TextBlock Name="L3MaxAngleValueText" Grid.Column="2" Text="90°" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                </Grid>
+                                
+                                <!-- Divider -->
+                                <Border BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="0,0,0,1" Margin="0,5,0,10"/>
+                                
+                                <!-- Theme Presets Dropdown -->
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Theme Preset:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                    <ComboBox Name="ThemeComboBox" Grid.Column="1" Height="24" FontSize="11" VerticalContentAlignment="Center" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}">
+                                        <ComboBoxItem Content="Revit Theme (Auto)"/>
+                                        <ComboBoxItem Content="pyRevit Dark"/>
+                                        <ComboBoxItem Content="Neon Fusion"/>
+                                        <ComboBoxItem Content="Classic Blue"/>
+                                        <ComboBoxItem Content="Forest Green"/>
+                                        <ComboBoxItem Content="Cyberpunk"/>
+                                        <ComboBoxItem Content="Custom Theme"/>
+                                    </ComboBox>
+                                </Grid>
+                                
+                                <!-- Custom Color Hex Inputs -->
+                                <TextBlock Text="Custom Hex Colors (e.g. #AARRGGBB)" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" FontWeight="Bold" Margin="0,5,0,8"/>
+                                
+                                <!-- Normal Fill -->
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Normal Fill:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                    <TextBox Name="HexNormalText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
+                                </Grid>
+                                
+                                <!-- Hover Start Fill -->
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Hover Start:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                    <TextBox Name="HexHoverStartText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
+                                </Grid>
+                                
+                                <!-- Hover End Fill -->
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Hover End:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                    <TextBox Name="HexHoverEndText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
+                                </Grid>
+                                
+                                <!-- Border Fill -->
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Border:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                    <TextBox Name="HexBorderText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
+                                </Grid>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+                    
+                    <!-- Hidden legacy tab placeholders to keep XAML name references valid -->
+                    <!-- Tab 2: PyRevit Command Picker (shown as dialog) -->
+                    <TabItem>
+                        <Grid Margin="0,5,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/> <!-- Search -->
+                                <RowDefinition Height="*"/>    <!-- TreeView -->
+                                <RowDefinition Height="Auto"/> <!-- Add button -->
+                            </Grid.RowDefinitions>
+                            
+                            <!-- Search Box for pyRevit commands -->
+                            <Grid Grid.Row="0" Margin="0,0,0,8">
+                                <TextBox Name="SearchBox" Height="26" Padding="5,2" 
+                                           Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" BorderThickness="1" 
+                                           VerticalContentAlignment="Center" FontSize="11"/>
+                                <TextBlock IsHitTestVisible="False" Text="Search pyRevit commands..." VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8,0,0,0" Foreground="{DynamicResource CustomizerSecText}" FontSize="11">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                            
+                            <!-- Commands TreeView -->
+                            <TreeView Name="CommandTreeView" Grid.Row="1" Background="Transparent" BorderThickness="0" 
+                                      ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
+                                <TreeView.ItemContainerStyle>
+                                    <Style TargetType="TreeViewItem">
+                                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource CustomizerText}"/>
+                                        <Setter Property="Padding" Value="2"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="TreeViewItem">
+                                                    <Grid>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition/>
+                                                        </Grid.RowDefinitions>
+                                                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderThickness="0" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="16"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <ToggleButton x:Name="Expander" ClickMode="Press" IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
+                                                                    <ToggleButton.Style>
+                                                                        <Style TargetType="ToggleButton">
+                                                                            <Setter Property="UIElement.Focusable" Value="false"/>
+                                                                            <Setter Property="Width" Value="12"/>
+                                                                            <Setter Property="Height" Value="12"/>
+                                                                            <Setter Property="Template">
+                                                                                <Setter.Value>
+                                                                                    <ControlTemplate TargetType="ToggleButton">
+                                                                                        <Border Background="Transparent" Width="12" Height="12">
+                                                                                            <Path x:Name="Arrow" Fill="{DynamicResource CustomizerSecText}" HorizontalAlignment="Center" VerticalAlignment="Center" Data="M 0,0 L 4,4 L 0,8 Z"/>
+                                                                                        </Border>
+                                                                                        <ControlTemplate.Triggers>
+                                                                                            <Trigger Property="IsChecked" Value="True">
+                                                                                                <Setter TargetName="Arrow" Property="RenderTransform">
+                                                                                                    <Setter.Value>
+                                                                                                        <RotateTransform Angle="90" CenterX="2" CenterY="4"/>
+                                                                                                    </Setter.Value>
+                                                                                                </Setter>
+                                                                                            </Trigger>
+                                                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                                                <Setter TargetName="Arrow" Property="Fill" Value="{DynamicResource CustomizerText}"/>
+                                                                                            </Trigger>
+                                                                                        </ControlTemplate.Triggers>
+                                                                                    </ControlTemplate>
+                                                                                </Setter.Value>
+                                                                            </Setter>
+                                                                        </Style>
+                                                                    </ToggleButton.Style>
+                                                                </ToggleButton>
+                                                                <ContentPresenter x:Name="PART_Header" Grid.Column="1" ContentSource="Header" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                                            </Grid>
+                                                        </Border>
+                                                        <ItemsPresenter x:Name="ItemsHost" Grid.Row="1" Margin="14,0,0,0"/>
+                                                    </Grid>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="HasItems" Value="False">
+                                                            <Setter TargetName="Expander" Property="Visibility" Value="Collapsed"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsExpanded" Value="False">
+                                                            <Setter TargetName="ItemsHost" Property="Visibility" Value="Collapsed"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsMouseOver" Value="True" SourceName="Bd">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#20FFFFFF"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsSelected" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#3000E5FF"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </TreeView.ItemContainerStyle>
+                                <TreeView.ItemTemplate>
+                                    <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                        <Grid Margin="2" Background="Transparent">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Grid.Column="0" CornerRadius="4" Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,6,0">
+                                                <Grid>
+                                                    <Image Source="{Binding IconPath}" Width="16" Height="16" Stretch="Uniform" Visibility="Collapsed" Name="NodeImage"/>
+                                                    <TextBlock Text="📁" FontSize="11" Foreground="{DynamicResource CustomizerSecText}" VerticalAlignment="Center" HorizontalAlignment="Center" Name="NodeFolder"/>
+                                                </Grid>
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource CustomizerText}" FontWeight="SemiBold"/>
+                                        </Grid>
+                                        <HierarchicalDataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding IsCommand}" Value="True">
+                                                <Setter TargetName="NodeFolder" Property="Visibility" Value="Collapsed"/>
+                                                <Setter TargetName="NodeImage" Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsPulldown}" Value="True">
+                                                <Setter TargetName="NodeFolder" Property="Visibility" Value="Collapsed"/>
+                                                <Setter TargetName="NodeImage" Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IconPath}" Value="{x:Null}"/>
+                                                    <Condition Binding="{Binding IsCommand}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter TargetName="NodeFolder" Property="Text" Value="📄"/>
+                                                <Setter TargetName="NodeFolder" Property="Foreground" Value="{DynamicResource CustomizerSecText}"/>
+                                                <Setter TargetName="NodeFolder" Property="Visibility" Value="Visible"/>
+                                            </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IconPath}" Value="{x:Null}"/>
+                                                    <Condition Binding="{Binding IsPulldown}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter TargetName="NodeFolder" Property="Text" Value="📁"/>
+                                                <Setter TargetName="NodeFolder" Property="Foreground" Value="{DynamicResource CustomizerHighlight}"/>
+                                                <Setter TargetName="NodeFolder" Property="Visibility" Value="Visible"/>
+                                            </MultiDataTrigger>
+                                        </HierarchicalDataTemplate.Triggers>
+                                    </HierarchicalDataTemplate>
+                                </TreeView.ItemTemplate>
+                            </TreeView>
+                            
+                            <!-- Add selected command -->
+                            <Button Name="BtnPickerAddCommand" Grid.Row="2" Content="Add Selected Command to Pool" Height="26"
+                                    Background="#FF4CAF50" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

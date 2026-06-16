@@ -1,0 +1,139 @@
+{
+    "command_pool": [
+        {
+            "icon": "\ud83d\udd0d", 
+            "parent": null, 
+            "level": 1, 
+            "priority": 10, 
+            "name": "Zoom Fit", 
+            "id": "zoom_fit", 
+            "context_rules": {}, 
+            "type": "built_in", 
+            "command": "zoom"
+        }, 
+        {
+            "icon": "\u274c", 
+            "parent": null, 
+            "level": 1, 
+            "priority": 30, 
+            "name": "Close Inact.", 
+            "id": "close_inact", 
+            "context_rules": {}, 
+            "type": "built_in", 
+            "command": "close_hidden"
+        }, 
+        {
+            "icon": "\ud83d\udd0d", 
+            "parent": "submenu1", 
+            "level": 2, 
+            "priority": 10, 
+            "name": "Sub-Zoom", 
+            "id": "sub_zoom", 
+            "context_rules": {}, 
+            "type": "built_in", 
+            "command": "zoom"
+        }, 
+        {
+            "icon": "\ud83d\udcbe", 
+            "parent": "submenu1", 
+            "level": 2, 
+            "priority": 20, 
+            "name": "Sub-Save", 
+            "id": "sub_save", 
+            "context_rules": {}, 
+            "type": "built_in", 
+            "command": "save"
+        }, 
+        {
+            "icon": "\ud83c\udfe0", 
+            "parent": "submenu1", 
+            "level": 2, 
+            "priority": 30, 
+            "name": "Sub-3D", 
+            "id": "sub_3d", 
+            "context_rules": {}, 
+            "type": "built_in", 
+            "command": "3d"
+        }, 
+        {
+            "icon": "\u25b6", 
+            "parent": "submenu1", 
+            "level": 2, 
+            "priority": 40, 
+            "name": "Menu 2", 
+            "id": "submenu2", 
+            "context_rules": {}, 
+            "type": "built_in", 
+            "command": "submenu2"
+        }, 
+        {
+            "icon": "\u2796", 
+            "parent": "submenu1", 
+            "level": 2, 
+            "priority": 50, 
+            "name": "Sub-Thin", 
+            "id": "sub_thin", 
+            "context_rules": {}, 
+            "type": "built_in", 
+            "command": "thin_lines"
+        }, 
+        {
+            "icon": "\ud83d\udca1", 
+            "parent": "submenu2", 
+            "level": 3, 
+            "priority": 10, 
+            "name": "Sub2-Reveal", 
+            "id": "sub2_reveal", 
+            "context_rules": {}, 
+            "type": "built_in", 
+            "command": "reveal"
+        }, 
+        {
+            "icon": "\ud83e\uddf1", 
+            "parent": "submenu2", 
+            "level": 3, 
+            "priority": 20, 
+            "name": "Sub2-Detail", 
+            "id": "sub2_detail", 
+            "context_rules": {}, 
+            "type": "built_in", 
+            "command": "detail_level"
+        }, 
+        {
+            "icon": "\ud83d\udd0d", 
+            "parent": "submenu2", 
+            "level": 3, 
+            "priority": 30, 
+            "name": "Sub2-Zoom", 
+            "id": "sub2_zoom", 
+            "context_rules": {}, 
+            "type": "built_in", 
+            "command": "zoom"
+        }, 
+        {
+            "icon": "\u2795", 
+            "parent": null, 
+            "level": 1, 
+            "priority": 20, 
+            "name": "New Built-in", 
+            "id": "new_builtin", 
+            "context_rules": {}, 
+            "type": "built_in", 
+            "command": "empty"
+        }
+    ], 
+    "settings": {
+        "gap_width": 8.5, 
+        "l2_max_angle": 60, 
+        "ring_gap": 8, 
+        "l3_max_angle": 70, 
+        "petal_width": 50, 
+        "theme": "pyRevit Dark", 
+        "hold_delay_ms": 500, 
+        "color_hover_start": "#FF0083B0", 
+        "color_hover_end": "#FF004B66", 
+        "color_normal": "#F21E1E24", 
+        "color_border": "#25FFFFFF", 
+        "core_radius": 41
+    }
+}

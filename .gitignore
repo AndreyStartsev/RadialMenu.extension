@@ -1,0 +1,10 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Revit journals / crash dumps / log files
+*.dmp
+*.log
+RadialMenu.tab/RadialMenu.panel/ToggleRadialMenu.pushbutton/RadialMenu_debug.log
