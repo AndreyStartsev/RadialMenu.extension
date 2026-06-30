@@ -16,7 +16,9 @@ clr.AddReference("PresentationFramework")
 clr.AddReference("System.Windows.Forms")
 clr.AddReference("System.Drawing")
 
-from System.Windows import Window, Visibility, Application
+from System.Windows import Window, Visibility, Application, Thickness, SystemParameters
+from System.Windows.Media import VisualTreeHelper, SolidColorBrush, ColorConverter, Brushes, Geometry
+from System.Windows.Controls import TreeViewItem
 from pyrevit.framework import wpf
 from pyrevit import HOST_APP, forms
 import System
@@ -27,8 +29,46 @@ import System.Windows.Input as wpf_input
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 
+# Configure ctypes signatures for 64-bit safety
+user32.GetForegroundWindow.argtypes = []
+user32.GetForegroundWindow.restype = ctypes.c_void_p
+user32.SetForegroundWindow.argtypes = [ctypes.c_void_p]
+user32.SetForegroundWindow.restype = ctypes.c_bool
+user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+user32.GetWindowThreadProcessId.restype = ctypes.c_uint32
+user32.GetDesktopWindow.argtypes = []
+user32.GetDesktopWindow.restype = ctypes.c_void_p
+user32.GetShellWindow.argtypes = []
+user32.GetShellWindow.restype = ctypes.c_void_p
+user32.BringWindowToTop.argtypes = [ctypes.c_void_p]
+user32.BringWindowToTop.restype = ctypes.c_bool
+
 # Hook callback signature (64-bit compatible)
 HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_int64, ctypes.c_int, ctypes.c_uint64, ctypes.c_uint64)
+
+# Configure ctypes signatures for 64-bit safety
+user32.SetWindowsHookExW.argtypes = [ctypes.c_int, HOOKPROC, ctypes.c_void_p, ctypes.c_uint32]
+user32.SetWindowsHookExW.restype = ctypes.c_void_p
+user32.UnhookWindowsHookEx.argtypes = [ctypes.c_void_p]
+user32.UnhookWindowsHookEx.restype = ctypes.c_bool
+user32.CallNextHookEx.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_uint64]
+user32.CallNextHookEx.restype = ctypes.c_int64
+user32.GetKeyState.argtypes = [ctypes.c_int]
+user32.GetKeyState.restype = ctypes.c_int16
+kernel32.GetCurrentThreadId.argtypes = []
+kernel32.GetCurrentThreadId.restype = ctypes.c_uint32
+
+# Most common Revit element classes and categories shown in context rules by default
+COMMON_REVIT_CLASSES = {
+    "Wall", "Walls", "Floor", "Floors", "Roof", "Roofs", "Ceiling", "Ceilings",
+    "Door", "Doors", "Window", "Windows", "FamilyInstance",
+    "Pipe", "Pipes", "Duct", "Ducts", "Conduit", "Conduits", "Cable Tray", "Cable Trays",
+    "Dimension", "Dimensions", "TextNote", "Text Notes", "Grid", "Grids", "Level", "Levels",
+    "View", "Views", "Sheet", "Sheets",
+    "Mechanical Equipment", "Electrical Equipment", "Lighting Fixtures", "Plumbing Fixtures",
+    "Structural Framing", "Structural Columns", "Stairs", "Railings",
+    "Area", "Areas", "Room", "Rooms", "Zone", "Zones", "Sprinkler", "Sprinklers"
+}
 
 # Debug Logger Setup
 LOG_FILE = os.path.join(os.path.dirname(__file__), "RadialMenu_debug.log")
@@ -127,6 +167,7 @@ def log_debug(msg):
 
 DEFAULT_SETTINGS = {
     "hold_delay_ms": 400,
+    "trigger_mode": "hold",
     "gap_width": 3.0,
     "core_radius": 45,
     "petal_width": 60,
@@ -263,6 +304,87 @@ def resolve_themed_icon(icon_path):
                 if os.path.exists(light_path):
                     return light_path
     return icon_path
+
+def load_bitmap_image_themed(img_path):
+    if not img_path:
+        return None
+    try:
+        if not os.path.isabs(img_path):
+            img_path = os.path.join(os.path.dirname(__file__), img_path)
+            
+        if not os.path.exists(img_path):
+            return None
+            
+        from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption, BitmapCreateOptions
+        from System import Uri
+        
+        bi = BitmapImage()
+        bi.BeginInit()
+        bi.UriSource = Uri(img_path)
+        bi.CacheOption = BitmapCacheOption.OnLoad
+        bi.CreateOptions = getattr(BitmapCreateOptions, "None")
+        bi.EndInit()
+        
+        try:
+            from Autodesk.Revit.UI import UIThemeManager, UITheme
+            is_revit_dark = (UIThemeManager.CurrentTheme == UITheme.Dark)
+        except:
+            is_revit_dark = False
+            
+        if not is_revit_dark:
+            return bi
+            
+        # Do not invert if it is a native dark image (.dark.png)
+        if img_path.lower().endswith(".dark.png"):
+            return bi
+            
+        try:
+            from System.Windows.Media.Imaging import WriteableBitmap
+            from System.Windows import Int32Rect
+            import System
+            
+            wb = WriteableBitmap(bi)
+            width = wb.PixelWidth
+            height = wb.PixelHeight
+            stride = width * 4
+            
+            pixels = System.Array.CreateInstance(System.Byte, stride * height)
+            wb.CopyPixels(pixels, stride, 0)
+            
+            # Check if it's grayscale and dark
+            is_grayscale = True
+            total_lum = 0
+            count = 0
+            for i in range(0, len(pixels), 4):
+                a = pixels[i+3]
+                if a > 30: # Only count visible pixels
+                    b = pixels[i]
+                    g = pixels[i+1]
+                    r = pixels[i+2]
+                    if abs(r - g) > 25 or abs(r - b) > 25 or abs(g - b) > 25:
+                        is_grayscale = False
+                    lum = 0.299 * r + 0.587 * g + 0.114 * b
+                    total_lum += lum
+                    count += 1
+                    
+            avg_lum = total_lum / count if count > 0 else 255
+            # Invert grayscale dark/black icons
+            if is_grayscale and avg_lum < 140:
+                for i in range(0, len(pixels), 4):
+                    pixels[i] = 255 - pixels[i]
+                    pixels[i+1] = 255 - pixels[i+1]
+                    pixels[i+2] = 255 - pixels[i+2]
+                
+                wb.WritePixels(Int32Rect(0, 0, width, height), pixels, stride, 0)
+                wb.Freeze()
+                return wb
+        except Exception as ex:
+            log_debug(u"Error inverting icon pixels: {}".format(safe_str(ex)))
+            
+        return bi
+    except Exception as ex:
+        log_debug(u"Error loading themed bitmap: {}".format(safe_str(ex)))
+        return None
 
 def clean_id_part(name):
     import re
@@ -580,6 +702,24 @@ def load_config():
                 
                 if "command_pool" not in data or not isinstance(data["command_pool"], list):
                     data["command_pool"] = list(DEFAULT_POOL)
+                else:
+                    # Automatically clean any legacy stack/slideout naming issues from config
+                    config_changed = False
+                    for item in data["command_pool"]:
+                        if item.get("type") == "pyrevit" and item.get("command"):
+                            cmd_val = item["command"]
+                            parts = cmd_val.split("_")
+                            cleaned_parts = [p for p in parts if "stack" not in p.lower() and "slideout" not in p.lower()]
+                            cleaned_val = "_".join(cleaned_parts)
+                            if cleaned_val != cmd_val:
+                                log_debug(u"Auto-migrated config command ID from '{}' to '{}'".format(cmd_val, cleaned_val))
+                                item["command"] = cleaned_val
+                                config_changed = True
+                                # Update ID too if it matches command
+                                if item.get("id") == cmd_val:
+                                    item["id"] = cleaned_val
+                    if config_changed:
+                        save_config(data)
                 
                 return data
     except Exception as ex:
@@ -588,8 +728,8 @@ def load_config():
 
 def save_config(config_data):
     try:
+        content = json.dumps(config_data, indent=4)
         with open(CONFIG_FILE, "wb") as f:
-            content = json.dumps(config_data, indent=4)
             f.write(content.encode("utf-8"))
         log_debug(u"Configuration saved successfully.")
     except Exception as ex:
@@ -619,7 +759,82 @@ _menu_opened_by_hold = False
 _active_window = None
 _ui_dispatcher = None
 _hold_delay_ms = 400
+_trigger_mode = "hold"
+_last_rbutton_down_time = 0.0
+_last_rbutton_down_x = 0
+_last_rbutton_down_y = 0
+_menu_opened_by_double_click = False
+_selection_before_click = None
 _cached_commands = None
+
+def get_statusbar_text():
+    try:
+        from pyrevit.revit import ui
+        import ctypes
+        hwnd = ui.get_statusbar_hwnd()
+        if hwnd:
+            length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+            if length > 0:
+                buf = ctypes.create_unicode_buffer(length + 1)
+                ctypes.windll.user32.GetWindowTextW(hwnd, buf, length + 1)
+                return buf.value
+    except Exception as ex:
+        log_debug("Failed to read status bar text: " + str(ex))
+    return ""
+
+def is_element_prehighlighted():
+    text = get_statusbar_text()
+    if not text:
+        return False
+    text_lower = text.lower()
+    idle_prompts = [
+        "ready",
+        "готово",
+        "click to select",
+        "для выбора",
+        "нажмите"
+    ]
+    for prompt in idle_prompts:
+        if prompt in text_lower:
+            return False
+    if len(text.strip()) < 3:
+        return False
+    return True
+
+def get_hovered_category():
+    text = get_statusbar_text()
+    if not text:
+        return None
+    text_lower = text.lower()
+    idle_prompts = [
+        "ready",
+        "готово",
+        "click to select",
+        "для выбора",
+        "нажмите"
+    ]
+    for prompt in idle_prompts:
+        if prompt in text_lower:
+            return None
+    parts = text.split(":")
+    if parts:
+        cat_name = parts[0].strip()
+        if len(cat_name) > 1:
+            return cat_name
+    return None
+
+def get_current_selection_state():
+    try:
+        uiapp = HOST_APP.uiapp
+        if uiapp and uiapp.ActiveUIDocument:
+            sel_ids = list(uiapp.ActiveUIDocument.Selection.GetElementIds())
+            if sel_ids and len(sel_ids) > 0:
+                return "Selection"
+    except:
+        pass
+    if is_element_prehighlighted():
+        return "Pre-highlighted"
+    return "None"
 
 # Thread safety lock and identifier counter for hold detection
 _hold_lock = threading.Lock()
@@ -815,8 +1030,16 @@ def execute_command(uiapp, cmd_type, cmd_value):
                 
         elif cmd_type == "pyrevit":
             from pyrevit.loader import sessionmgr
-            log_debug(u"Calling sessionmgr.execute_command for {}".format(cmd_value))
-            sessionmgr.execute_command(cmd_value)
+            cmd_to_run = cmd_value
+            if cmd_value:
+                parts = cmd_value.split("_")
+                cleaned_parts = [p for p in parts if "stack" not in p.lower() and "slideout" not in p.lower()]
+                cleaned_val = "_".join(cleaned_parts)
+                if cleaned_val != cmd_value:
+                    log_debug(u"Cleaned pyRevit command unique name from '{}' to '{}'".format(cmd_value, cleaned_val))
+                    cmd_to_run = cleaned_val
+            log_debug(u"Calling sessionmgr.execute_command for {}".format(cmd_to_run))
+            sessionmgr.execute_command(cmd_to_run)
             
     except Exception as ex:
         log_debug(u"Exception in execute_command (Python Exception): {}".format(safe_str(ex)))
@@ -856,6 +1079,10 @@ class TreeItem(object):
 
     @property
     def IconPath(self):
+        if self._icon_path and isinstance(self._icon_path, (str, unicode)):
+            if not hasattr(self, "_cached_icon_source"):
+                self._cached_icon_source = load_bitmap_image_themed(self._icon_path)
+            return self._cached_icon_source
         return self._icon_path
 
     @property
@@ -943,6 +1170,74 @@ def parse_cmd_hierarchy(cmd):
     else:
         ext_name = getattr(cmd, "extension", None) or u"External"
         return ext_name, u"Commands", None
+
+
+def get_revit_ribbon_commands():
+    cmds = []
+    seen_ids = set()
+    try:
+        import clr
+        clr.AddReference("AdWindows")
+        import Autodesk.Windows as adWin
+        
+        ribbon_ctrl = adWin.ComponentManager.Ribbon
+        if not ribbon_ctrl:
+            return cmds
+            
+        def process_ribbon_item(item, tab_title, panel_title):
+            if not item:
+                return
+            
+            item_id = getattr(item, "Id", None)
+            if item_id:
+                id_lower = item_id.lower()
+                is_valid_prefix = item_id.startswith("ID_") or item_id.startswith("CustomCtrl..")
+                is_excluded = (
+                    "pyrevit" in id_lower or 
+                    "radialmenu" in id_lower or
+                    "pyrevit" in tab_title.lower() or
+                    "radialmenu" in tab_title.lower() or
+                    "pyrevit" in panel_title.lower() or
+                    "radialmenu" in panel_title.lower()
+                )
+                if is_valid_prefix and not is_excluded:
+                    if id_lower not in seen_ids:
+                        seen_ids.add(id_lower)
+                        
+                        text = getattr(item, "Text", None) or getattr(item, "Name", None) or item_id
+                        if text:
+                            text = text.replace("\r\n", " ").replace("\n", " ").strip()
+                        
+                        cmds.append({
+                            "id": item_id,
+                            "title": text,
+                            "tab": tab_title,
+                            "panel": panel_title
+                        })
+            
+            if hasattr(item, "Items") and item.Items:
+                for sub_item in item.Items:
+                    process_ribbon_item(sub_item, tab_title, panel_title)
+                    
+        for tab in ribbon_ctrl.Tabs:
+            tab_title = getattr(tab, "Title", None) or getattr(tab, "Name", None) or u"Other"
+            tab_title = tab_title.strip()
+            if not tab_title:
+                continue
+            
+            if tab.Panels:
+                for panel in tab.Panels:
+                    panel_title = u"Other"
+                    if panel.Source:
+                        panel_title = getattr(panel.Source, "Title", None) or getattr(panel.Source, "Name", None) or u"Other"
+                    panel_title = panel_title.strip()
+                    
+                    if panel.Source and panel.Source.Items:
+                        for item in panel.Source.Items:
+                            process_ribbon_item(item, tab_title, panel_title)
+    except Exception as ex:
+        log_debug(u"Error getting Revit Ribbon structure: {}".format(safe_str(ex)))
+    return cmds
 
 
 def find_all_extension_dirs():
@@ -1045,6 +1340,32 @@ def classify_element_type(name, category_groups=None):
 
 
 # Radial Menu WPF Controller
+class IconItem(object):
+    def __init__(self, name, clean_name, full_path, path_val):
+        self._name = name
+        self._clean_name = clean_name
+        self._full_path = full_path
+        self._path_val = path_val
+
+    @property
+    def Name(self):
+        return self._name
+
+    @property
+    def CleanName(self):
+        return self._clean_name
+
+    @property
+    def FullPath(self):
+        if not hasattr(self, "_cached_icon_source"):
+            self._cached_icon_source = load_bitmap_image_themed(self._full_path)
+        return self._cached_icon_source
+
+    @property
+    def PathVal(self):
+        return self._path_val
+
+
 class ClassItem(object):
     def __init__(self, name, is_checked=False, group="Model Elements"):
         self._name = name
@@ -1078,12 +1399,98 @@ class ClassItem(object):
 
 
 class PoolListItem(object):
-    def __init__(self, item):
+    def __init__(self, item, window=None):
         self._item = item
+        self._window = window
+        self._is_selected = False
+        self._children = []
+        self._is_checked = False
+
+    @property
+    def EyeBrush(self):
+        if not self._item.get("is_active", True):
+            return SolidColorBrush(ColorConverter.ConvertFromString("#FFE53935"))  # Red
+            
+        is_visible = True
+        if self._window:
+            is_visible = self._window.is_item_matching_context(self._item)
+            
+        is_light = getattr(self._window, "_is_light", False)
+        if is_light:
+            if is_visible:
+                return SolidColorBrush(ColorConverter.ConvertFromString("#FF1E1E24"))  # Dark
+            else:
+                return SolidColorBrush(ColorConverter.ConvertFromString("#FFB0B0B0"))  # Lighter grey
+        else:
+            if is_visible:
+                return SolidColorBrush(ColorConverter.ConvertFromString("#FFFFFFFF"))  # White
+            else:
+                return SolidColorBrush(ColorConverter.ConvertFromString("#FF757575"))  # Grey
+
+    @property
+    def EyeGeometry(self):
+        if not self._item.get("is_active", True):
+            # Eye off (crossed out)
+            return Geometry.Parse("M12 4.5c-5 0-9.27 3.11-11 7.5 1.22 3.1 3.96 5.57 7.24 6.78l1.45-1.45C6.9 16.29 4.67 14.39 3.42 12c1.61-3.66 5.22-6 8.58-6 1.15 0 2.26.27 3.27.76l1.46-1.46C15.19 4.8 13.62 4.5 12 4.5zM22.58 21.08L3.42 1.92 1.92 3.42l4.8 4.8C4.54 9.17 2.89 10.45 1.58 12c1.73 4.39 6 7.5 11 7.5 2.2 0 4.26-.6 6.07-1.63l2.42 2.42 1.5-1.5zM12 17c-2.76 0-5-2.24-5-5 0-.77.18-1.5.49-2.14l6.65 6.65C13.5 16.82 12.77 17 12 17zm8.58-5c-1.25-2.39-3.48-4.29-6.27-5.33l1.52-1.52C19.1 6.36 20.83 8.83 22 12c-1.22 3.1-3.96 5.57-7.24 6.78l-1.45-1.45c2.79-1.04 5.02-2.94 6.27-5.33z")
+        else:
+            # Eye normal
+            return Geometry.Parse("M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z")
+
+    @property
+    def EyeToolTip(self):
+        if not self._item.get("is_active", True):
+            return u"Disabled permanently (Click to enable)"
+            
+        is_visible = True
+        if self._window:
+            is_visible = self._window.is_item_matching_context(self._item)
+            
+        if is_visible:
+            return u"Visible in current context (Click to disable)"
+        else:
+            return u"Hidden by active context rules (Click to disable)"
+
+    @property
+    def IsSelected(self):
+        return self._is_selected
+
+    @IsSelected.setter
+    def IsSelected(self, value):
+        self._is_selected = value
+
+    @property
+    def IsChecked(self):
+        return self._is_checked
+
+    @IsChecked.setter
+    def IsChecked(self, value):
+        self._is_checked = value
+
+    @property
+    def children(self):
+        return self._children
 
     @property
     def Icon(self):
-        return self._item.get("icon", "")
+        val = self._item.get("icon", "")
+        if val and (val.lower().endswith(".png") or os.path.sep in val or "/" in val):
+            try:
+                # Resolve the absolute path if needed
+                img_path = val
+                if not os.path.isabs(img_path):
+                    img_path = os.path.join(os.path.dirname(__file__), img_path)
+                if os.path.exists(img_path):
+                    return load_bitmap_image_themed(img_path)
+            except:
+                pass
+        return val
+
+    @property
+    def IsImageIcon(self):
+        val = self._item.get("icon", "")
+        if val and (val.lower().endswith(".png") or os.path.sep in val or "/" in val):
+            return True
+        return False
 
     @property
     def DisplayName(self):
@@ -1123,8 +1530,8 @@ class ContextRulesDialog(Window):
         self.all_classes_items = []
         
         # Populate View check boxes
-        allowed_views = current_rules.get("allowed_views", []) if current_rules else []
-        if allowed_views:
+        if current_rules and "allowed_views" in current_rules:
+            allowed_views = current_rules["allowed_views"] or []
             self.ChkView3D.IsChecked = "3D" in allowed_views
             self.ChkViewPlan.IsChecked = "Plan" in allowed_views
             self.ChkViewSheet.IsChecked = "Sheet" in allowed_views
@@ -1166,14 +1573,24 @@ class ContextRulesDialog(Window):
         except Exception as cat_ex:
             log_debug("Failed to get categories in ContextRulesDialog: " + str(cat_ex))
             
-        reflected = sorted(list(set(reflected)))
-            
-        # If intersected_classes are provided, restrict the list to them
-        if self.intersected_classes is not None:
-            reflected = [c for c in reflected if c in self.intersected_classes]
-            
-        # Check active classes
         allowed_classes = current_rules.get("allowed_classes", []) if current_rules else []
+        allowed_classes_set = set(allowed_classes)
+        intersected_classes_set = set(self.intersected_classes) if self.intersected_classes else set()
+
+        def get_sort_key(c):
+            is_allowed = c in allowed_classes_set
+            is_intersected = c in intersected_classes_set
+            if is_allowed and is_intersected:
+                prio = 0
+            elif is_allowed:
+                prio = 1
+            elif is_intersected:
+                prio = 2
+            else:
+                prio = 3
+            return (prio, c.lower())
+
+        reflected = sorted(list(set(reflected)), key=get_sort_key)
         
         from System.Collections.ObjectModel import ObservableCollection
         self.classes_collection = ObservableCollection[object]()
@@ -1232,10 +1649,6 @@ class ContextRulesDialog(Window):
         if self.ChkView3D.IsChecked: views.append("3D")
         if self.ChkViewPlan.IsChecked: views.append("Plan")
         if self.ChkViewSheet.IsChecked: views.append("Sheet")
-        
-        # If all views are selected, we can store it as empty (meaning all views)
-        if len(views) == 3:
-            views = []
             
         classes = [item.Name for item in self.all_classes_items if item.IsChecked]
         return {
@@ -1249,12 +1662,15 @@ class RadialMenuWindow(Window):
     def __init__(self, xaml_path, active_context="default"):
         self._is_closing = False
         self.customizer_mode = False
+        self._is_light = False
         self._all_commands = []
         self._restore_revit_focus = True
         self._drag_start_point = System.Windows.Point()
         self.active_context = active_context
         self._active_l1_parent = None
         self._active_l2_parent = None
+        self.picker_mode = "all"
+        self._current_revit_sel_classes = set()
         
         # Debounce Timers setup
         from System.Windows.Threading import DispatcherTimer
@@ -1271,6 +1687,11 @@ class RadialMenuWindow(Window):
         self._pool_search_timer = DispatcherTimer()
         self._pool_search_timer.Interval = TimeSpan.FromMilliseconds(250)
         self._pool_search_timer.Tick += self.on_pool_search_timer_tick
+        
+        self._icon_search_timer = DispatcherTimer()
+        self._icon_search_timer.Interval = TimeSpan.FromMilliseconds(250)
+        self._icon_search_timer.Tick += self.on_icon_search_timer_tick
+        self._icon_search_query = ""
         
         log_debug(u"RadialMenuWindow.__init__ started for context: {}.".format(self.active_context))
         try:
@@ -1289,6 +1710,11 @@ class RadialMenuWindow(Window):
             raise
             
         try:
+            self._brush_before_after = SolidColorBrush(ColorConverter.ConvertFromString("#08FFFFFF"))
+            self._brush_inside = SolidColorBrush(ColorConverter.ConvertFromString("#2500E5FF"))
+            self._brush_accent = SolidColorBrush(ColorConverter.ConvertFromString("#FF00E5FF"))
+            self._brush_transparent = Brushes.Transparent
+            
             # Connect WPF button Click and Mouse events dynamically for all 30 buttons
             for slot_num, btn_name in SLOT_BUTTONS.items():
                 btn = getattr(self, btn_name, None)
@@ -1310,6 +1736,9 @@ class RadialMenuWindow(Window):
             
             # Customizer Panel buttons
             self.BtnExitCustomizer.Click += self.on_exit_customizer_clicked
+            self.BtnExitCustomizerLook.Click += self.on_exit_customizer_clicked
+            if hasattr(self, "BtnDeleteChecked") and self.BtnDeleteChecked:
+                self.BtnDeleteChecked.Click += self.on_delete_checked_clicked
 
             # Connect hover events dynamically for Level 1 & 2
             for idx in range(1, 11):
@@ -1472,7 +1901,7 @@ class RadialMenuWindow(Window):
             if not self.customizer_mode:
                 filtered_pool = self.filter_pool_by_context(pool)
             else:
-                filtered_pool = list(pool)
+                filtered_pool = [p for p in pool if p.get("is_active", True)]
             
             self._command_pool = pool  # Full pool for settings editing
             self._filtered_pool = filtered_pool  # Context-filtered for display
@@ -1542,46 +1971,132 @@ class RadialMenuWindow(Window):
             log_debug(u"Failed to load layout configuration: {}".format(safe_str(ex)))
             self._level_counts = (0, 0, 0)
 
+    def is_item_matching_context(self, item):
+        try:
+            rules = item.get("context_rules", {})
+            if not rules:
+                return True
+                
+            # Get current view category
+            current_view_category = "Plan"
+            try:
+                uiapp = HOST_APP.uiapp
+                if uiapp and uiapp.ActiveUIDocument:
+                    active_view = uiapp.ActiveUIDocument.ActiveView
+                    if active_view:
+                        from Autodesk.Revit.DB import ViewType
+                        vt = active_view.ViewType
+                        if vt in [ViewType.ThreeD]:
+                            current_view_category = "3D"
+                        elif vt in [ViewType.FloorPlan, ViewType.CeilingPlan, ViewType.AreaPlan, ViewType.EngineeringPlan, ViewType.Elevation, ViewType.Section]:
+                            current_view_category = "Plan"
+                        elif vt in [ViewType.DrawingSheet]:
+                            current_view_category = "Sheet"
+            except:
+                pass
+                
+            # A. Check allowed_views
+            if "allowed_views" in rules:
+                allowed_views = rules["allowed_views"]
+                if allowed_views:
+                    if current_view_category not in allowed_views:
+                        return False
+            
+            # Determine selection state and classes
+            if getattr(self, "customizer_mode", False):
+                ctx = self.active_context
+                if ctx == "default":
+                    current_state = "None"
+                    sel_classes = set()
+                else:
+                    current_state = "Selection"
+                    if ctx == "pipes":
+                        sel_classes = {"Pipes", "Pipe"}
+                    elif ctx == "ducts":
+                        sel_classes = {"Ducts", "Duct"}
+                    elif ctx == "walls":
+                        sel_classes = {"Walls", "Wall"}
+                    elif ctx == "dimensions":
+                        sel_classes = {"Dimensions", "Dimension"}
+                    else:
+                        sel_classes = set()
+            else:
+                current_state = get_current_selection_state()
+                sel_classes = getattr(self, "_current_revit_sel_classes", set())
+                
+            # B. Check allowed_selection_states
+            if "allowed_selection_states" in rules:
+                allowed_states = rules["allowed_selection_states"] or []
+                if allowed_states:
+                    if current_state not in allowed_states:
+                        return False
+                    
+                    allowed_classes = rules.get("allowed_classes", [])
+                    if allowed_classes:
+                        class_match = False
+                        if sel_classes:
+                            for c in allowed_classes:
+                                if c in sel_classes:
+                                    class_match = True
+                                    break
+                        if not class_match:
+                            return False
+                                
+            return True
+        except:
+            return True
+
     def filter_pool_by_context(self, pool):
         """Filter pool items by current Revit context (view type + selected element classes)."""
         try:
             ctx = self.active_context
+            
+            # 1. Retrieve actual currently selected element classes/categories from Revit
+            sel_classes = set()
+            try:
+                uiapp = HOST_APP.uiapp
+                if uiapp and uiapp.ActiveUIDocument:
+                    uidoc = uiapp.ActiveUIDocument
+                    if uidoc:
+                        doc = uidoc.Document
+                        sel_ids = list(uidoc.Selection.GetElementIds())
+                        if sel_ids:
+                            for eid in sel_ids[:50]:
+                                el = doc.GetElement(eid)
+                                if el:
+                                    t = el.GetType()
+                                    while t is not None and t != System.Object:
+                                        if t.Namespace == "Autodesk.Revit.DB":
+                                            sel_classes.add(t.Name)
+                                        t = t.BaseType
+                                    if el.Category:
+                                        sel_classes.add(el.Category.Name)
+                                        for eng_name in get_english_names_for_category(el.Category):
+                                            sel_classes.add(eng_name)
+                        else:
+                            # Try to get the hovered category if nothing is selected
+                            hovered_cat = get_hovered_category()
+                            if hovered_cat:
+                                sel_classes.add(hovered_cat)
+                                cat_obj = find_category_by_localized_name(doc, hovered_cat)
+                                if cat_obj:
+                                    for eng_name in get_english_names_for_category(cat_obj):
+                                        sel_classes.add(eng_name)
+            except Exception as ex:
+                log_debug("Error gathering selection classes for filtering: " + str(ex))
+                
+            self._current_revit_sel_classes = sel_classes
+            
             filtered = []
             for item in pool:
-                rules = item.get("context_rules", {})
-                if not rules:
-                    # No rules = always visible
-                    filtered.append(item)
+                if not item.get("is_active", True):
                     continue
-                    
-                # Check allowed_views
-                allowed_views = rules.get("allowed_views", [])
-                if allowed_views:
-                    view_match = False
-                    if "3D" in allowed_views and "3d" in ctx.lower():
-                        view_match = True
-                    elif "Plan" in allowed_views and ("plan" in ctx.lower() or "section" in ctx.lower()):
-                        view_match = True
-                    elif "Sheet" in allowed_views and "sheet" in ctx.lower():
-                        view_match = True
-                    elif not allowed_views:
-                        view_match = True
-                    
-                    if not view_match:
-                        continue
-                
-                # Check allowed_classes
-                allowed_classes = rules.get("allowed_classes", [])
-                if allowed_classes:
-                    # For now, if classes are specified, include the command
-                    # Full class matching will be done when Revit selection context is available
-                    pass
-                
-                filtered.append(item)
+                if self.is_item_matching_context(item):
+                    filtered.append(item)
             return filtered
         except Exception as ex:
             log_debug(u"Error filtering pool by context: {}".format(safe_str(ex)))
-            return list(pool)
+            return [p for p in pool if p.get("is_active", True)]
 
     def update_button_ui_by_name(self, btn_name, name, icon_type, icon_value):
         try:
@@ -1611,7 +2126,7 @@ class RadialMenuWindow(Window):
                         icon_name = resolved_icon or "".join([c for c in cmd_val if c.isalnum() or c in ("_", "-")]).strip()
                         local_png = os.path.join(os.path.dirname(__file__), "extracted_icons", icon_name + ".png")
                         if os.path.exists(local_png):
-                            img_path = local_png
+                            img_path = resolve_themed_icon(local_png)
                             is_image = True
             
             if is_image and img_path:
@@ -1619,9 +2134,7 @@ class RadialMenuWindow(Window):
                     img_path = os.path.join(os.path.dirname(__file__), img_path)
                 if os.path.exists(img_path):
                     try:
-                        from System.Windows.Media.Imaging import BitmapImage
-                        from System import Uri
-                        image_element.Source = BitmapImage(Uri(img_path))
+                        image_element.Source = load_bitmap_image_themed(img_path)
                         image_element.Visibility = Visibility.Visible
                         emoji_element.Visibility = Visibility.Collapsed
                     except Exception as ex:
@@ -1654,6 +2167,19 @@ class RadialMenuWindow(Window):
 
     def setup_customizer_mode(self):
         self.customizer_mode = True
+        
+        # Subscribe to Revit InputManager events for drag and drop (including dropdowns/pulldowns)
+        try:
+            from System.Windows.Input import InputManager
+            try:
+                InputManager.Current.PostNotifyInput -= self.on_input_manager_pre_notify
+            except:
+                pass
+            InputManager.Current.PostNotifyInput += self.on_input_manager_pre_notify
+            log_debug("Subscribed to global WPF InputManager events for drag-and-drop.")
+        except Exception as ad_ex:
+            log_debug("Failed to subscribe to InputManager events: " + str(ad_ex))
+            
         log_debug(u"Setting up customizer mode UI.")
         
         # Stop hook to prevent mouse events from interfering with customizer controls and DragMove
@@ -1681,14 +2207,14 @@ class RadialMenuWindow(Window):
         except Exception as ex:
             log_debug("Failed to schedule icon extraction: " + str(ex))
 
-        # Reset modes
-        self._move_mode_active = False
+        # Set Move mode active by default
+        self._move_mode_active = True
         
-        # Reset backgrounds of settings buttons
+        # Set backgrounds of settings buttons for Move active
         from System.Windows.Media import SolidColorBrush, ColorConverter
         try:
-            self.BtnCoreMove.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF55555C"))
-            self.BtnCorePool.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF0083B0"))
+            self.BtnCoreMove.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF0083B0"))
+            self.BtnCorePool.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF4CAF50"))
             self.BtnCoreAppearance.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFC107"))
             self.BtnCoreExit.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFE53935"))
         except:
@@ -1701,7 +2227,8 @@ class RadialMenuWindow(Window):
                 if self.CustomizerBorder.Parent:
                     self.MainGrid.Children.Remove(self.CustomizerBorder)
                 
-                from System.Windows import Window, WindowStyle, ResizeMode
+                from System.Windows import Window, WindowStyle, ResizeMode, Thickness, CornerRadius
+                from System.Windows.Shell import WindowChrome
                 from System.Windows.Media import Brushes
                 
                 cust_win = Window()
@@ -1709,11 +2236,19 @@ class RadialMenuWindow(Window):
                 cust_win.Width = 680
                 cust_win.Height = 640
                 cust_win.WindowStyle = getattr(WindowStyle, "None")
-                cust_win.ResizeMode = ResizeMode.NoResize
+                cust_win.ResizeMode = ResizeMode.CanResize
                 cust_win.AllowsTransparency = True
                 cust_win.Background = Brushes.Transparent
                 cust_win.ShowInTaskbar = False
                 cust_win.UseLayoutRounding = True
+                
+                # Apply WindowChrome to enable borderless resizing
+                chrome = WindowChrome()
+                chrome.CaptionHeight = 0
+                chrome.ResizeBorderThickness = Thickness(6)
+                chrome.GlassFrameThickness = Thickness(0)
+                chrome.CornerRadius = CornerRadius(0)
+                WindowChrome.SetWindowChrome(cust_win, chrome)
                 
                 # Copy resources so themes/styles work inside CustomizerBorder
                 cust_win.Resources = self.Resources
@@ -1756,7 +2291,7 @@ class RadialMenuWindow(Window):
                 log_debug(u"Failed to create Customizer Window: {}".format(safe_str(win_ex)))
                 
         from System.Windows import Visibility
-        self.CustomizerBorder.Visibility = Visibility.Visible
+        self.CustomizerBorder.Visibility = Visibility.Collapsed
         if hasattr(self, "customizer_window") and self.customizer_window:
             self.customizer_window.Show()
             self.customizer_window.Activate()
@@ -1773,6 +2308,8 @@ class RadialMenuWindow(Window):
         # Wire up events once
         if not getattr(self, "_customizer_events_wired", False):
             try:
+                # Wire up trigger mode combobox
+                self.TriggerModeComboBox.SelectionChanged += self.on_trigger_mode_changed
                 # Wire up appearance sliders
                 self.DelaySlider.ValueChanged += self.on_appearance_setting_changed
                 self.CoreRadiusSlider.ValueChanged += self.on_appearance_setting_changed
@@ -1796,31 +2333,51 @@ class RadialMenuWindow(Window):
                 # Connect search text changes
                 self.PoolSearchBox.TextChanged += self.on_pool_search_changed
                 
-                # Connect pool list selection
-                self.PoolListBox.SelectionChanged += self.on_pool_selection_changed
+                # Connect pool tree selection and drag-drop
+                self.PoolTreeView.SelectedItemChanged += self.on_pool_selection_changed
+                self.PoolTreeView.PreviewMouseLeftButtonDown += self.on_pool_mouse_down
+                self.PoolTreeView.PreviewMouseMove += self.on_pool_mouse_move
+                self.PoolTreeView.AllowDrop = True
+                self.PoolTreeView.DragOver += self.on_pool_tree_drag_over
+                self.PoolTreeView.DragLeave += self.on_pool_tree_drag_leave
+                self.PoolTreeView.Drop += self.on_pool_tree_drop
+                
+                # Wire up routed button clicks inside PoolTreeView (e.g. Row Delete trash bin)
+                from System.Windows.Controls import Button as wpf_button
+                from System.Windows import RoutedEventHandler
+                self.PoolTreeView.AddHandler(wpf_button.ClickEvent, RoutedEventHandler(self.on_pool_list_button_click))
                 
                 # Connect pool edit panel buttons
                 self.BtnPoolItemSave.Click += self.on_save_edit_clicked
-                self.BtnPoolItemDelete.Click += self.on_delete_command_clicked
                 self.BtnPoolItemCancel.Click += self.on_cancel_edit_clicked
                 
                 # Connect add buttons
                 self.BtnAddFromPyRevit.Click += self.on_add_from_pyrevit_clicked
-                self.BtnAddBuiltIn.Click += self.on_add_builtin_clicked
                 self.BtnAddSubmenuPool.Click += self.on_add_submenu_clicked
+                self.BtnAddEmptyPool.Click += self.on_add_empty_clicked
                 
-                # Connect reset all
-                self.BtnReset.Click += self.on_reset_clicked
-                
-                # Connect command picker items
                 self.SearchBox.TextChanged += self.on_search_changed
                 self.BtnPickerAddCommand.Click += self.on_picker_add_command_clicked
+                self.BtnPickerCancel.Click += self.on_picker_cancel_clicked
                 
                 # Connect EditClassSearchTextChanged
                 self.EditClassSearch.TextChanged += self.on_context_class_search_changed
                 
+                # Connect Selection/Pre-highlighted CheckBoxes
+                self.EditChkPrehighlighted.Checked += self.on_selection_checkbox_changed
+                self.EditChkPrehighlighted.Unchecked += self.on_selection_checkbox_changed
+                self.EditChkSelection.Checked += self.on_selection_checkbox_changed
+                self.EditChkSelection.Unchecked += self.on_selection_checkbox_changed
+                
                 # Connect window dragging via Title
                 self.TxtPanelTitle.MouseLeftButtonDown += self.on_customizer_mouse_down
+                
+                # Connect icon picker overlay controls
+                self.BtnSelectIcon.Click += self.on_select_icon_clicked
+                self.IconPickerSearchBox.TextChanged += self.on_icon_picker_search_changed
+                self.BtnIconPickerSelect.Click += self.on_icon_picker_select_clicked
+                self.BtnIconPickerCancel.Click += self.on_icon_picker_cancel_clicked
+                self.IconPickerListBox.MouseDoubleClick += self.on_icon_picker_double_click
                 
                 self._customizer_events_wired = True
                 log_debug(u"Wired up customizer events successfully.")
@@ -1850,6 +2407,13 @@ class RadialMenuWindow(Window):
 
     def get_sector_path_parallel(self, cx, cy, r_in, r_out, angle_center, num_sectors, gap_width):
         import math
+        # If there is only one sector, draw a full concentric ring (donut) to avoid collapsed degenerate arcs
+        if num_sectors == 1:
+            path = "M {0:.2f},{1:.2f} A {2},{2} 0 1,1 {0:.2f},{3:.2f} A {2},{2} 0 1,1 {0:.2f},{1:.2f} M {0:.2f},{4:.2f} A {5},{5} 0 1,0 {0:.2f},{6:.2f} A {5},{5} 0 1,0 {0:.2f},{4:.2f} Z".format(
+                cx, cy - r_out, r_out, cy + r_out, cy - r_in, r_in, cy + r_in
+            )
+            return path
+
         # Full sector span in degrees
         span = 360.0 / float(num_sectors)
         theta1 = angle_center - span / 2.0
@@ -2157,25 +2721,29 @@ class RadialMenuWindow(Window):
             # Check if resolved theme is dark or light based on normal color luminance
             normal_lum = get_luminance(color_normal)
             is_light = (normal_lum > 0.5)
+            self._is_light = is_light
             
             if is_light:
-                c_bg = "#FFF4F4F4"
-                c_text = "#1E1E24"
-                c_sec_text = "#88000000"
-                c_input_bg = "#E0E0E0"
-                c_input_text = "#1E1E24"
-                c_border_brush = "#30000000"
-                c_highlight = "#FF1D3A56"  # Revit Blue
+                c_bg = "#FFF5F5F7"         # Window Background
+                c_panel_bg = "#FFE5E5EA"    # Edit Panel Background (distinct light-gray)
+                c_text = "#FF1E1E24"        # Main Text
+                c_sec_text = "#FF55555C"    # Secondary Text (clear, not disabled-looking)
+                c_input_bg = "#FFFFFFFF"    # Textbox / Input Background (crisp white!)
+                c_input_text = "#FF1E1E24"
+                c_border_brush = "#FFCCCCCC"
+                c_highlight = "#FF0083B0"
             else:
-                c_bg = "#FF1A1A1A"
-                c_text = "#FFFFFF"
-                c_sec_text = "#88FFFFFF"
-                c_input_bg = "#20FFFFFF"
-                c_input_text = "#FFFFFF"
-                c_border_brush = "#30FFFFFF"
-                c_highlight = "#FF00E5FF"  # Cyan
+                c_bg = "#FF1E1E24"
+                c_panel_bg = "#FF2D2D30"    # Edit Panel Background
+                c_text = "#FFFFFFFF"
+                c_sec_text = "#FFAAAAAA"
+                c_input_bg = "#FF121212"    # Input Background (darker than panel background)
+                c_input_text = "#FFFFFFFF"
+                c_border_brush = "#FF3E3E42"
+                c_highlight = "#FF00E5FF"
                 
             self.Resources["CustomizerBg"] = SolidColorBrush(ColorConverter.ConvertFromString(c_bg))
+            self.Resources["CustomizerPanelBg"] = SolidColorBrush(ColorConverter.ConvertFromString(c_panel_bg))
             self.Resources["CustomizerText"] = SolidColorBrush(ColorConverter.ConvertFromString(c_text))
             self.Resources["CustomizerSecText"] = SolidColorBrush(ColorConverter.ConvertFromString(c_sec_text))
             self.Resources["CustomizerInputBg"] = SolidColorBrush(ColorConverter.ConvertFromString(c_input_bg))
@@ -2222,6 +2790,32 @@ class RadialMenuWindow(Window):
             self.queue_save_config()
         except Exception as ex:
             log_debug(u"Error in on_appearance_setting_changed: {}".format(safe_str(ex)))
+
+    def on_trigger_mode_changed(self, sender, args):
+        if getattr(self, "_updating_ui_elements", False):
+            return
+            
+        try:
+            settings = self._config_data.get("settings", {})
+            mode_idx = self.TriggerModeComboBox.SelectedIndex
+            mode_name = "hold" if mode_idx == 0 else "double_click"
+            
+            settings["trigger_mode"] = mode_name
+            
+            global _trigger_mode
+            _trigger_mode = mode_name
+            
+            # Enable/disable DelaySlider depending on trigger mode
+            if mode_name == "double_click":
+                self.DelaySlider.IsEnabled = False
+                self.DelayValueText.Foreground = self.Resources["CustomizerSecText"]
+            else:
+                self.DelaySlider.IsEnabled = True
+                self.DelayValueText.Foreground = self.Resources["CustomizerHighlight"]
+                
+            self.queue_save_config()
+        except Exception as ex:
+            log_debug(u"Error in on_trigger_mode_changed: {}".format(safe_str(ex)))
 
     def on_theme_changed(self, sender, args):
         if getattr(self, "_updating_ui_elements", False):
@@ -2290,6 +2884,16 @@ class RadialMenuWindow(Window):
         try:
             self._updating_ui_elements = True
             settings = self._config_data.get("settings", dict(DEFAULT_SETTINGS))
+            
+            trigger_mode_str = settings.get("trigger_mode", "hold")
+            self.TriggerModeComboBox.SelectedIndex = 1 if trigger_mode_str == "double_click" else 0
+            
+            if trigger_mode_str == "double_click":
+                self.DelaySlider.IsEnabled = False
+                self.DelayValueText.Foreground = self.Resources["CustomizerSecText"]
+            else:
+                self.DelaySlider.IsEnabled = True
+                self.DelayValueText.Foreground = self.Resources["CustomizerHighlight"]
             
             self.DelaySlider.Value = float(settings.get("hold_delay_ms", 400))
             self.DelayValueText.Text = u"{} ms".format(int(self.DelaySlider.Value))
@@ -2445,6 +3049,14 @@ class RadialMenuWindow(Window):
 
             self.customizer_mode = False
             
+            # Unsubscribe from Revit InputManager events
+            try:
+                from System.Windows.Input import InputManager
+                InputManager.Current.PostNotifyInput -= self.on_input_manager_pre_notify
+                log_debug("Unsubscribed from global WPF InputManager events.")
+            except Exception as ad_ex:
+                log_debug("Failed to unsubscribe from InputManager events: " + str(ad_ex))
+            
             # Collapse edit panel if open
             self.hide_edit_panel()
             
@@ -2491,13 +3103,17 @@ class RadialMenuWindow(Window):
 
     def show_edit_panel(self):
         try:
-            self.PoolEditPanel.IsEnabled = True
+            self.PoolEditPanel.Visibility = System.Windows.Visibility.Visible
+            if hasattr(self, "PoolEditPlaceholder") and self.PoolEditPlaceholder:
+                self.PoolEditPlaceholder.Visibility = System.Windows.Visibility.Collapsed
         except Exception as ex:
             log_debug("Error showing edit panel: " + str(ex))
 
     def hide_edit_panel(self):
         try:
-            self.PoolEditPanel.IsEnabled = False
+            self.PoolEditPanel.Visibility = System.Windows.Visibility.Collapsed
+            if hasattr(self, "PoolEditPlaceholder") and self.PoolEditPlaceholder:
+                self.PoolEditPlaceholder.Visibility = System.Windows.Visibility.Visible
         except Exception as ex:
             log_debug("Error hiding edit panel: " + str(ex))
 
@@ -2520,18 +3136,7 @@ class RadialMenuWindow(Window):
 
     def on_pool_search_timer_tick(self, sender, args):
         self._pool_search_timer.Stop()
-        try:
-            search_text = self.PoolSearchBox.Text.strip().lower() if self.PoolSearchBox.Text else ""
-            pool = self._config_data.get("command_pool", [])
-            filtered = []
-            for item in pool:
-                name = item.get("name", "").lower()
-                cmd = item.get("command", "").lower()
-                if not search_text or search_text in name or search_text in cmd:
-                    filtered.append(PoolListItem(item))
-            self.PoolListBox.ItemsSource = filtered
-        except Exception as ex:
-            log_debug(u"Error in on_pool_search_timer_tick: {}".format(safe_str(ex)))
+        self.load_pool_list()
 
     def on_customizer_window_closing(self, sender, args):
         args.Cancel = True
@@ -2540,10 +3145,34 @@ class RadialMenuWindow(Window):
         except Exception as ex:
             log_debug("Error in customizer window closing: " + str(ex))
 
+    def restore_revit_focus(self):
+        try:
+            revit_hwnd = HOST_APP.proc_window
+            if revit_hwnd:
+                hwnd_val = revit_hwnd.ToInt64()
+                active_hwnd = user32.GetForegroundWindow()
+                if active_hwnd != hwnd_val:
+                    # Bring to top and request foreground activation
+                    user32.BringWindowToTop(hwnd_val)
+                    res = user32.SetForegroundWindow(hwnd_val)
+                    log_debug(u"Restored focus to Revit MainWindow (HWND={}, Success={}).".format(hwnd_val, res))
+                else:
+                    log_debug(u"Revit MainWindow is already active (HWND={}).".format(hwnd_val))
+        except Exception as focus_ex:
+            log_debug(u"Failed to restore focus to Revit: {}".format(safe_str(focus_ex)))
+
     def on_window_closing(self, sender, args):
         global _active_window
         # Close customizer window if open
         try:
+            # Unsubscribe from Revit InputManager events on window closing
+            try:
+                from System.Windows.Input import InputManager
+                InputManager.Current.PostNotifyInput -= self.on_input_manager_pre_notify
+                log_debug("Unsubscribed from global WPF InputManager events on window closing.")
+            except Exception as ad_ex:
+                log_debug("Failed to unsubscribe from InputManager events on window closing: " + str(ad_ex))
+
             if hasattr(self, "customizer_window") and self.customizer_window:
                 self.customizer_window.Closing -= self.on_customizer_window_closing
                 self.customizer_window.Close()
@@ -2571,14 +3200,7 @@ class RadialMenuWindow(Window):
             
         # Force restore focus to Revit MainWindow if requested
         if getattr(self, "_restore_revit_focus", True):
-            try:
-                revit_hwnd = HOST_APP.proc_window
-                if revit_hwnd:
-                    hwnd_val = revit_hwnd.ToInt64()
-                    user32.SetForegroundWindow(hwnd_val)
-                    log_debug(u"Restored focus to Revit MainWindow (HWND={}).".format(hwnd_val))
-            except Exception as focus_ex:
-                log_debug(u"Failed to restore focus to Revit: {}".format(safe_str(focus_ex)))
+            self.restore_revit_focus()
             
         _active_window = None
         log_debug(u"RadialMenuWindow closed, _active_window cleared.")
@@ -2586,25 +3208,225 @@ class RadialMenuWindow(Window):
     # ==================== POOL LIST UI METHODS ====================
     
     def load_pool_list(self):
-        """Populate the PoolListBox with commands from the command pool using databound wrappers."""
+        """Populate the PoolTreeView with commands from the command pool hierarchically."""
         try:
-            self.PoolListBox.ItemsSource = None
+            self.PoolTreeView.ItemsSource = None
             pool = self._config_data.get("command_pool", [])
-            items = [PoolListItem(item) for item in pool]
-            self._pool_list_items = items
-            self.PoolListBox.ItemsSource = items
-            log_debug(u"Loaded {} items into pool list.".format(len(pool)))
+            
+            search_text = self.PoolSearchBox.Text.strip().lower() if hasattr(self, "PoolSearchBox") else ""
+            
+            # Wrap all items
+            checked_ids = getattr(self, "_checked_item_ids_cache", set())
+            wrappers = []
+            for item in pool:
+                w = PoolListItem(item, self)
+                item_id = item.get("id")
+                if item_id and item_id in checked_ids:
+                    w._is_checked = True
+                wrappers.append(w)
+            item_map = {w._item.get("id"): w for w in wrappers if w._item.get("id")}
+            
+            # Reset children
+            for w in wrappers:
+                w._children = []
+                
+            # Build hierarchy
+            roots = []
+            for w in wrappers:
+                parent_id = w._item.get("parent")
+                if parent_id and parent_id in item_map:
+                    item_map[parent_id]._children.append(w)
+                else:
+                    roots.append(w)
+                    
+            # Sort roots and children by level, then priority
+            def sort_nodes(nodes):
+                nodes.sort(key=lambda x: (x._item.get("level", 1), x._item.get("priority", 0)))
+                for n in nodes:
+                    if n._children:
+                        sort_nodes(n._children)
+                        
+            sort_nodes(roots)
+            
+            # Apply search filter if search_text is not empty
+            if search_text:
+                filtered_roots = []
+                # Helper to check if a node or any of its descendants matches search
+                def filter_node(node):
+                    matches_self = search_text in node.DisplayName.lower() or search_text in node.ContextSummary.lower()
+                    
+                    # Filter children recursively
+                    matching_children = []
+                    for child in node._children:
+                        filtered_child = filter_node(child)
+                        if filtered_child:
+                            matching_children.append(filtered_child)
+                            
+                    if matches_self or matching_children:
+                        # Return a new wrapper or modify _children for display
+                        node._children = matching_children
+                        return node
+                    return None
+                    
+                for r in roots:
+                    filtered_r = filter_node(r)
+                    if filtered_r:
+                        filtered_roots.append(filtered_r)
+                display_items = filtered_roots
+            else:
+                display_items = roots
+                
+            self._pool_list_items = wrappers # Keep reference to all
+            self.PoolTreeView.ItemsSource = display_items
+            log_debug(u"Loaded tree items into pool.")
         except Exception as ex:
             log_debug(u"Error in load_pool_list: {}".format(safe_str(ex)))
-    
+
+    def clear_tree_selection(self):
+        try:
+            self._checked_item_ids_cache = set()
+            for wrapper in getattr(self, "_pool_list_items", []):
+                wrapper.IsSelected = False
+                wrapper.IsChecked = False
+        except Exception as ex:
+            log_debug("Failed to clear tree selection: " + str(ex))
+
+    def select_tree_node_by_item(self, target_item):
+        try:
+            if not target_item:
+                return
+            target_id = target_item.get("id")
+            if not target_id:
+                return
+            # First clear selection
+            self.clear_tree_selection()
+            for wrapper in getattr(self, "_pool_list_items", []):
+                if wrapper._item.get("id") == target_id:
+                    wrapper.IsSelected = True
+                    break
+        except Exception as ex:
+            log_debug("Failed to select tree node: " + str(ex))
+     
     def on_pool_search_changed(self, sender, args):
         self._pool_search_timer.Stop()
         self._pool_search_timer.Start()
-    
+     
+
+                
+    def _init_revit_classes_list(self):
+        if getattr(self, "_revit_classes_initialized", False):
+            return
+            
+        try:
+            import Autodesk.Revit.DB as db
+            reflected = []
+            category_groups = {}
+            
+            # 1. Reflect Revit assembly types
+            try:
+                assembly = System.Reflection.Assembly.GetAssembly(db.Element)
+                types = assembly.GetTypes()
+                for t in types:
+                    if t.IsClass and t.IsSubclassOf(db.Element) and t.Namespace == "Autodesk.Revit.DB":
+                        reflected.append(t.Name)
+            except Exception as ex:
+                log_debug("Failed to reflect Revit classes: " + str(ex))
+                reflected = ["Wall", "Floor", "Pipe", "Duct", "FamilyInstance", "Dimension"]
+                
+            # 2. Get Category names from document
+            try:
+                uiapp = HOST_APP.uiapp
+                if uiapp and uiapp.ActiveUIDocument:
+                    doc = uiapp.ActiveUIDocument.Document
+                    for cat in doc.Settings.Categories:
+                        if cat.Name:
+                            reflected.append(cat.Name)
+                            eng_names = get_english_names_for_category(cat)
+                            for eng in eng_names:
+                                reflected.append(eng)
+                            try:
+                                if str(cat.CategoryType) == "Annotation":
+                                    category_groups[cat.Name] = "Annotation Elements"
+                                    for eng in eng_names:
+                                        category_groups[eng] = "Annotation Elements"
+                                elif str(cat.CategoryType) == "Model":
+                                    category_groups[cat.Name] = "Model Elements"
+                                    for eng in eng_names:
+                                        category_groups[eng] = "Model Elements"
+                            except:
+                                pass
+            except Exception as cat_ex:
+                log_debug("Failed to get categories: " + str(cat_ex))
+                
+            # 3. Get currently selected element classes from Revit (ONCE)
+            intersected_classes = []
+            try:
+                uiapp = HOST_APP.uiapp
+                if uiapp and uiapp.ActiveUIDocument:
+                    uidoc = uiapp.ActiveUIDocument
+                    if uidoc:
+                        doc = uidoc.Document
+                        sel_ids = list(uidoc.Selection.GetElementIds())
+                        if sel_ids:
+                            selected_classes_sets = []
+                            # Limit to first 50 items to prevent lag in huge selections
+                            for eid in sel_ids[:50]:
+                                el = doc.GetElement(eid)
+                                if el:
+                                    t = el.GetType()
+                                    el_classes = []
+                                    while t is not None and t != System.Object:
+                                        if t.Namespace == "Autodesk.Revit.DB":
+                                            el_classes.append(t.Name)
+                                        t = t.BaseType
+                                    if el.Category:
+                                        el_classes.append(el.Category.Name)
+                                        el_classes.extend(get_english_names_for_category(el.Category))
+                                    selected_classes_sets.append(set(el_classes))
+                            if selected_classes_sets:
+                                common = selected_classes_sets[0]
+                                for s in selected_classes_sets[1:]:
+                                    common = common.intersection(s)
+                                intersected_classes = list(common)
+            except Exception as sel_ex:
+                log_debug("Failed to get selection classes for initialization sorting: " + str(sel_ex))
+                
+            self._intersected_classes_set = set(intersected_classes)
+            
+            # Sort: selection classes first, then alphabetical
+            def get_init_sort_key(c):
+                prio = 0 if c in self._intersected_classes_set else 1
+                return (prio, c.lower())
+                
+            reflected = sorted(list(set(reflected)), key=get_init_sort_key)
+            
+            # Create ObservableCollection and ClassItem objects
+            self._all_classes_items = []
+            from System.Collections.ObjectModel import ObservableCollection
+            self._classes_collection = ObservableCollection[object]()
+            
+            for name in reflected:
+                group_name = classify_element_type(name, category_groups)
+                c_item = ClassItem(name, False, group_name)
+                self._all_classes_items.append(c_item)
+                self._classes_collection.Add(c_item)
+                
+            self.EditClassList.ItemsSource = self._classes_collection
+            
+            from System.Windows.Data import CollectionViewSource, PropertyGroupDescription
+            from System import Predicate
+            self._classes_view = CollectionViewSource.GetDefaultView(self._classes_collection)
+            self._classes_view.Filter = Predicate[object](self.classes_filter_predicate)
+            self._classes_view.GroupDescriptions.Add(PropertyGroupDescription("Group"))
+            
+            self._revit_classes_initialized = True
+        except Exception as ex:
+            log_debug("Error initializing Revit classes list: " + str(ex))
+
     def on_pool_selection_changed(self, sender, args):
         """When a pool item is selected, populate the edit panel."""
         try:
-            selected_wrapper = self.PoolListBox.SelectedItem
+            selected_wrapper = self.PoolTreeView.SelectedItem
             if not selected_wrapper:
                 self.hide_edit_panel()
                 return
@@ -2623,35 +3445,11 @@ class RadialMenuWindow(Window):
             self.EditItemCommandTxt.Text = item.get("command", "")
             self.EditItemIconTxt.Text = item.get("icon", "")
             
-            # 2. Select Level in ComboBox
-            level = item.get("level", 1)
-            self.EditLevelCombo.SelectedIndex = max(0, min(2, level - 1))
-            
-            # 3. Populate and Select Parent
-            self.EditParentCombo.Items.Clear()
-            from System.Windows.Controls import ComboBoxItem
-            root_item = ComboBoxItem()
-            root_item.Content = "None (Root)"
-            self.EditParentCombo.Items.Add(root_item)
-            
-            pool = self._config_data.get("command_pool", [])
-            submenus = [p for p in pool if p.get("command") in ["submenu1", "submenu2"] and p.get("id") != item.get("id")]
-            self._editing_submenus = submenus
-            
-            selected_parent_idx = 0
-            for idx, sub in enumerate(submenus, 1):
-                cbi = ComboBoxItem()
-                cbi.Content = u"{} ({})".format(sub.get("name"), sub.get("id"))
-                self.EditParentCombo.Items.Add(cbi)
-                if sub.get("id") == item.get("parent"):
-                    selected_parent_idx = idx
-            
-            self.EditParentCombo.SelectedIndex = selected_parent_idx
             
             # 4. View filters CheckBoxes
             rules = item.get("context_rules", {}) or {}
-            allowed_views = rules.get("allowed_views", []) or []
-            if allowed_views:
+            if "allowed_views" in rules:
+                allowed_views = rules["allowed_views"] or []
                 self.EditChkView3D.IsChecked = "3D" in allowed_views
                 self.EditChkViewPlan.IsChecked = "Plan" in allowed_views
                 self.EditChkViewSheet.IsChecked = "Sheet" in allowed_views
@@ -2660,193 +3458,353 @@ class RadialMenuWindow(Window):
                 self.EditChkViewPlan.IsChecked = True
                 self.EditChkViewSheet.IsChecked = True
                 
+            # 4b. Selection filters CheckBoxes
+            if "allowed_selection_states" in rules:
+                allowed_states = rules["allowed_selection_states"] or []
+                self.EditChkPrehighlighted.IsChecked = "Pre-highlighted" in allowed_states
+                self.EditChkSelection.IsChecked = "Selection" in allowed_states
+            else:
+                self.EditChkPrehighlighted.IsChecked = True
+                self.EditChkSelection.IsChecked = True
+                
             # 5. Revit DB Classes list
-            uiapp = HOST_APP.uiapp
-            doc = None
-            intersected_classes = None
-            if uiapp:
-                uidoc = uiapp.ActiveUIDocument
-                if uidoc:
-                    doc = uidoc.Document
-                    sel_ids = uidoc.Selection.GetElementIds()
-                    if sel_ids and sel_ids.Count > 0:
-                        selected_classes_sets = []
-                        for eid in sel_ids:
-                            el = doc.GetElement(eid)
-                            if el:
-                                t = el.GetType()
-                                el_classes = []
-                                while t is not None and t != System.Object:
-                                    if t.Namespace == "Autodesk.Revit.DB":
-                                        el_classes.append(t.Name)
-                                    t = t.BaseType
-                                if el.Category:
-                                    el_classes.append(el.Category.Name)
-                                selected_classes_sets.append(set(el_classes))
-                        if selected_classes_sets:
-                            common = selected_classes_sets[0]
-                            for s in selected_classes_sets[1:]:
-                                common = common.intersection(s)
-                            intersected_classes = list(common)
+            self._init_revit_classes_list()
             
-            import Autodesk.Revit.DB as db
-            reflected = []
-            category_groups = {}
-            try:
-                assembly = System.Reflection.Assembly.GetAssembly(db.Element)
-                types = assembly.GetTypes()
-                for t in types:
-                    if t.IsClass and t.IsSubclassOf(db.Element) and t.Namespace == "Autodesk.Revit.DB":
-                        reflected.append(t.Name)
-            except Exception as ex:
-                log_debug("Failed to reflect Revit classes: " + str(ex))
-                reflected = ["Wall", "Floor", "Pipe", "Duct", "FamilyInstance", "Dimension"]
-                
-            try:
-                if doc:
-                    for cat in doc.Settings.Categories:
-                        if cat.Name:
-                            reflected.append(cat.Name)
-                            try:
-                                if str(cat.CategoryType) == "Annotation":
-                                    category_groups[cat.Name] = "Annotation Elements"
-                                elif str(cat.CategoryType) == "Model":
-                                    category_groups[cat.Name] = "Model Elements"
-                            except Exception as cat_type_ex:
-                                log_debug("Failed to get CategoryType for {}: {}".format(cat.Name, cat_type_ex))
-            except Exception as cat_ex:
-                log_debug("Failed to get categories: " + str(cat_ex))
-                
-            reflected = sorted(list(set(reflected)))
-            if intersected_classes is not None and len(intersected_classes) > 0:
-                reflected = [c for c in reflected if c in intersected_classes]
-                
             allowed_classes = rules.get("allowed_classes", []) or []
+            self._allowed_classes_set = set(allowed_classes)
             
-            self._all_classes_items = []
-            from System.Collections.ObjectModel import ObservableCollection
-            self._classes_collection = ObservableCollection[object]()
-            
-            for name in reflected:
-                is_checked = name in allowed_classes
-                group_name = classify_element_type(name, category_groups)
-                c_item = ClassItem(name, is_checked, group_name)
-                self._all_classes_items.append(c_item)
-                self._classes_collection.Add(c_item)
+            self._updating_ui_elements = True
+            for c_item in getattr(self, "_all_classes_items", []):
+                c_item.IsChecked = c_item.Name in self._allowed_classes_set
                 
-            self.EditClassList.ItemsSource = self._classes_collection
-            
-            from System.Windows.Data import CollectionViewSource, PropertyGroupDescription
-            from System import Predicate
-            self._classes_view = CollectionViewSource.GetDefaultView(self._classes_collection)
-            self._classes_view.Filter = Predicate[object](self.classes_filter_predicate)
-            self._classes_view.GroupDescriptions.Add(PropertyGroupDescription("Group"))
+            # Refresh CollectionView to update UI bindings instantly
+            if hasattr(self, "_classes_view") and self._classes_view:
+                self._classes_view.Refresh()
+                
+            # Enable/disable class search and list based on checkboxes
+            has_filtering = (self.EditChkPrehighlighted.IsChecked == True) or (self.EditChkSelection.IsChecked == True)
+            self.EditClassSearch.IsEnabled = has_filtering
+            self.EditClassList.IsEnabled = has_filtering
             
             self._updating_ui_elements = False
         except Exception as ex:
             log_debug(u"Error in on_pool_selection_changed: {}".format(safe_str(ex)))
     
     def on_save_edit_clicked(self, sender, args):
-        """Save edits from the edit panel back to the pool item."""
+        """Save edits from the edit panel back to the pool item(s)."""
         try:
-            item = getattr(self, "_editing_pool_item", None)
-            if not item:
-                return
-            
-            # Update basic details
-            item["name"] = self.EditItemNameTxt.Text.strip()
-            item["command"] = self.EditItemCommandTxt.Text.strip()
-            
-            icon_val = self.EditItemIconTxt.Text.strip()
-            if not icon_val:
-                icon_val = suggest_emoji_by_name(item["name"])
-            item["icon"] = icon_val
-            
-            # Update level
-            item["level"] = self.EditLevelCombo.SelectedIndex + 1
-            
-            # Update parent
-            parent_idx = self.EditParentCombo.SelectedIndex
-            if parent_idx <= 0:
-                item["parent"] = None
-            else:
-                submenus = getattr(self, "_editing_submenus", [])
-                if 0 <= parent_idx - 1 < len(submenus):
-                    item["parent"] = submenus[parent_idx - 1].get("id")
+            checked_items = [w for w in getattr(self, "_pool_list_items", []) if w.IsChecked]
             
             # View type filter
             views = []
             if self.EditChkView3D.IsChecked: views.append("3D")
             if self.EditChkViewPlan.IsChecked: views.append("Plan")
             if self.EditChkViewSheet.IsChecked: views.append("Sheet")
-            # If all checked, represent as empty (always visible)
-            if len(views) == 3:
-                views = []
+                
+            # Selection state filter
+            states = []
+            if self.EditChkPrehighlighted.IsChecked: states.append("Pre-highlighted")
+            if self.EditChkSelection.IsChecked: states.append("Selection")
                 
             # Class filter
             classes = [c.Name for c in self._all_classes_items if c.IsChecked]
             
-            item["context_rules"] = {
+            rules = {
                 "allowed_views": views,
+                "allowed_selection_states": states,
                 "allowed_classes": classes
             }
             
+            if len(checked_items) > 1:
+                # Bulk edit saving
+                for w in checked_items:
+                    w._item["context_rules"] = dict(rules)
+                log_debug(u"Bulk saved context rules for {} items.".format(len(checked_items)))
+            else:
+                item = getattr(self, "_editing_pool_item", None)
+                if not item and len(checked_items) == 1:
+                    item = checked_items[0]._item
+                if not item:
+                    item = self.PoolTreeView.SelectedItem._item if self.PoolTreeView.SelectedItem else None
+                if not item:
+                    return
+                
+                # Update basic details
+                item["name"] = self.EditItemNameTxt.Text.strip()
+                item["command"] = self.EditItemCommandTxt.Text.strip()
+                
+                icon_val = self.EditItemIconTxt.Text.strip()
+                if not icon_val:
+                    icon_val = suggest_emoji_by_name(item["name"])
+                item["icon"] = icon_val
+                item["context_rules"] = rules
+                log_debug(u"Saved pool item: {}".format(item.get("name")))
+            
             save_config(self._config_data)
-            self.load_pool_list()
             self.load_layout_configuration()
+            self.load_pool_list()
             self.update_radial_geometry()
             
             # Hide edit panel
             self.hide_edit_panel()
-            self.PoolListBox.SelectedIndex = -1
-            log_debug(u"Saved pool item: {}".format(item.get("name")))
+            self.clear_tree_selection()
         except Exception as ex:
             log_debug(u"Error in on_save_edit_clicked: {}".format(safe_str(ex)))
             
     def on_cancel_edit_clicked(self, sender, args):
         try:
             self.hide_edit_panel()
-            self.PoolListBox.SelectedIndex = -1
+            self.clear_tree_selection()
+            self.load_pool_list()
         except Exception as ex:
             log_debug(u"Error in on_cancel_edit_clicked: {}".format(safe_str(ex)))
-    
-    def on_add_builtin_clicked(self, sender, args):
-        """Add a new built-in command to the pool."""
+
+    def on_pool_item_checked_changed(self, sender, args):
         try:
-            pool = self._config_data.get("command_pool", [])
-            base_id = "new_builtin"
-            cmd_id = base_id
-            existing_ids = {p.get("id", "") for p in pool}
-            counter = 1
-            while cmd_id in existing_ids:
-                cmd_id = "{}_{}".format(base_id, counter)
-                counter += 1
-                
-            l1_priorities = [p.get("priority", 0) for p in pool if p.get("level") == 1]
-            max_priority = max(l1_priorities) if l1_priorities else 0
-            new_item = {
-                "id": cmd_id,
-                "type": "built_in",
-                "name": "New Built-in",
-                "command": "empty",
-                "icon": u"\u2795",
-                "level": 1,
-                "parent": None,
-                "priority": max_priority + 10,
-                "context_rules": {}
-            }
-            pool.append(new_item)
-            save_config(self._config_data)
-            self.load_pool_list()
-            self.load_layout_configuration()
-            self.update_radial_geometry()
+            checked_ids = set()
+            for w in getattr(self, "_pool_list_items", []):
+                if w.IsChecked:
+                    item_id = w._item.get("id")
+                    if item_id:
+                        checked_ids.add(item_id)
+            self._checked_item_ids_cache = checked_ids
+            self.update_edit_panel_for_checked_items()
+        except Exception as ex:
+            log_debug("Error in on_pool_item_checked_changed: " + str(ex))
+
+    def update_edit_panel_for_checked_items(self):
+        try:
+            checked_items = [w for w in getattr(self, "_pool_list_items", []) if w.IsChecked]
+            if not checked_items:
+                selected_wrapper = self.PoolTreeView.SelectedItem
+                if selected_wrapper:
+                    self.on_pool_selection_changed(None, None)
+                else:
+                    self.hide_edit_panel()
+                return
+
+            self.show_edit_panel()
+            self._updating_ui_elements = True
             
-            # Find the wrapped item and select it
-            for i, p_item in enumerate(self.PoolListBox.ItemsSource):
-                if p_item._item == new_item:
-                    self.PoolListBox.SelectedIndex = i
-                    break
-            log_debug(u"Added new built-in: {}".format(cmd_id))
+            if len(checked_items) == 1:
+                item = checked_items[0]._item
+                self._editing_pool_item = item
+                self.TxtEditItemName.Text = u"Configure Rules: {}".format(item.get("name", "Unnamed"))
+                
+                self.EditItemNameTxt.Text = item.get("name", "")
+                self.EditItemCommandTxt.Text = item.get("command", "")
+                self.EditItemIconTxt.Text = item.get("icon", "")
+                
+                self.EditItemNameTxt.IsEnabled = True
+                self.EditItemCommandTxt.IsEnabled = True
+                self.EditItemIconTxt.IsEnabled = True
+                self.BtnSelectIcon.IsEnabled = True
+                rules = item.get("context_rules", {}) or {}
+            else:
+                self._editing_pool_item = None
+                self.TxtEditItemName.Text = u"Bulk Edit: {} items".format(len(checked_items))
+                
+                self.EditItemNameTxt.Text = u"[Multiple Values]"
+                self.EditItemCommandTxt.Text = u"[Multiple Values]"
+                self.EditItemIconTxt.Text = u"[Multiple Values]"
+                
+                self.EditItemNameTxt.IsEnabled = False
+                self.EditItemCommandTxt.IsEnabled = False
+                self.EditItemIconTxt.IsEnabled = False
+                self.BtnSelectIcon.IsEnabled = False
+                
+                rules = checked_items[0]._item.get("context_rules", {}) or {}
+                
+            if "allowed_views" in rules:
+                allowed_views = rules["allowed_views"] or []
+                self.EditChkView3D.IsChecked = "3D" in allowed_views
+                self.EditChkViewPlan.IsChecked = "Plan" in allowed_views
+                self.EditChkViewSheet.IsChecked = "Sheet" in allowed_views
+            else:
+                self.EditChkView3D.IsChecked = True
+                self.EditChkViewPlan.IsChecked = True
+                self.EditChkViewSheet.IsChecked = True
+                
+            if "allowed_selection_states" in rules:
+                allowed_states = rules["allowed_selection_states"] or []
+                self.EditChkPrehighlighted.IsChecked = "Pre-highlighted" in allowed_states
+                self.EditChkSelection.IsChecked = "Selection" in allowed_states
+            else:
+                self.EditChkPrehighlighted.IsChecked = True
+                self.EditChkSelection.IsChecked = True
+                
+            self._init_revit_classes_list()
+            allowed_classes = rules.get("allowed_classes", []) or []
+            self._allowed_classes_set = set(allowed_classes)
+            
+            for c_item in getattr(self, "_all_classes_items", []):
+                c_item.IsChecked = c_item.Name in self._allowed_classes_set
+                
+            if hasattr(self, "_classes_view") and self._classes_view:
+                self._classes_view.Refresh()
+                
+            has_filtering = (self.EditChkPrehighlighted.IsChecked == True) or (self.EditChkSelection.IsChecked == True)
+            self.EditClassSearch.IsEnabled = has_filtering
+            self.EditClassList.IsEnabled = has_filtering
+            
+            self._updating_ui_elements = False
+        except Exception as ex:
+            log_debug("Error in update_edit_panel_for_checked_items: " + str(ex))
+
+    def on_delete_checked_clicked(self, sender, args):
+        try:
+            checked_items = [w for w in getattr(self, "_pool_list_items", []) if w.IsChecked]
+            if not checked_items:
+                from pyrevit import forms
+                forms.alert("No commands checked. Please check the items you want to delete.")
+                return
+                
+            from pyrevit import forms
+            if forms.alert(u"Delete {} selected commands from pool?".format(len(checked_items)), yes=True, no=True):
+                pool = self._config_data.get("command_pool", [])
+                for w in checked_items:
+                    item = w._item
+                    if item in pool:
+                        pool.remove(item)
+                    item_id = item.get("id")
+                    if item_id and item.get("command") in ["submenu1", "submenu2"]:
+                        for p_item in pool:
+                            if p_item.get("parent") == item_id:
+                                p_item["parent"] = None
+                                p_item["level"] = 1
+                save_config(self._config_data)
+                self.load_layout_configuration()
+                self.load_pool_list()
+                self.update_radial_geometry()
+                self.hide_edit_panel()
+                self.clear_tree_selection()
+                log_debug(u"Bulk deleted {} items from pool.".format(len(checked_items)))
+        except Exception as ex:
+            log_debug(u"Error in on_delete_checked_clicked: {}".format(safe_str(ex)))
+    
+    def load_all_icons(self):
+        """Load all icons from extracted_icons directory."""
+        if hasattr(self, "_cached_icon_items"):
+            return self._cached_icon_items
+            
+        icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
+        icon_items = []
+        if os.path.exists(icons_dir):
+            try:
+                for filename in os.listdir(icons_dir):
+                    if filename.lower().endswith(".png") and not filename.lower().endswith(".dark.png"):
+                        cmd_id = filename[:-4] # Remove .png
+                        
+                        name_part = cmd_id
+                        if name_part.startswith("ID_"):
+                            name_part = name_part[3:]
+                            
+                        prefixes_to_clean = ["OBJECTS_", "RBS_", "ANNOTATIONS_", "ANNOTATE_", "VIEW_", "EDIT_", "FILE_", "SETTINGS_", "BUTTON_", "MODIFY_", "WINDOW_"]
+                        for prefix in prefixes_to_clean:
+                            if name_part.startswith(prefix):
+                                name_part = name_part[len(prefix):]
+                                break
+                                
+                        words = name_part.split("_")
+                        clean_words = []
+                        for w in words:
+                            if w and w not in clean_words:
+                                clean_words.append(w)
+                        clean_name = " ".join(clean_words).title()
+                        
+                        full_path = os.path.join(icons_dir, filename)
+                        path_val = "extracted_icons/" + filename
+                        
+                        icon_items.append(IconItem(cmd_id, clean_name, full_path, path_val))
+            except Exception as ex:
+                log_debug("Error loading icons from folder: " + str(ex))
+                
+        # Sort icons by CleanName
+        icon_items = sorted(icon_items, key=lambda x: x.CleanName)
+        self._cached_icon_items = icon_items
+        return icon_items
+
+    def on_select_icon_clicked(self, sender, args):
+        try:
+            # Load icons if not loaded
+            icons = self.load_all_icons()
+            
+            # Populate ObservableCollection (only once or clear and re-populate)
+            if not hasattr(self, "_icon_collection") or not self._icon_collection:
+                from System.Collections.ObjectModel import ObservableCollection
+                from System.Windows.Data import CollectionViewSource
+                from System import Predicate
+                
+                self._icon_collection = ObservableCollection[object]()
+                for icon in icons:
+                    self._icon_collection.Add(icon)
+                    
+                self.IconPickerListBox.ItemsSource = self._icon_collection
+                self._icon_view = CollectionViewSource.GetDefaultView(self._icon_collection)
+                self._icon_view.Filter = Predicate[object](self.icon_filter_predicate)
+                
+            # Reset search text
+            self._icon_search_query = ""
+            self.IconPickerSearchBox.Text = ""
+            if hasattr(self, "_icon_view") and self._icon_view:
+                self._icon_view.Refresh()
+            
+            # Show overlay
+            self.IconPickerOverlay.Visibility = Visibility.Visible
+            log_debug("Opened Icon Picker overlay.")
+        except Exception as ex:
+            log_debug("Error opening Icon Picker: " + str(ex))
+
+    def icon_filter_predicate(self, obj):
+        query = getattr(self, "_icon_search_query", "")
+        if not query:
+            return True
+        icon = obj
+        return query in icon.Name.lower() or query in icon.CleanName.lower()
+
+    def on_icon_picker_search_changed(self, sender, args):
+        self._icon_search_timer.Stop()
+        self._icon_search_timer.Start()
+
+    def on_icon_search_timer_tick(self, sender, args):
+        self._icon_search_timer.Stop()
+        try:
+            self._icon_search_query = self.IconPickerSearchBox.Text.strip().lower() if self.IconPickerSearchBox.Text else ""
+            if hasattr(self, "_icon_view") and self._icon_view:
+                self._icon_view.Refresh()
+        except Exception as ex:
+            log_debug("Error in icon search tick: " + str(ex))
+
+    def on_icon_picker_select_clicked(self, sender, args):
+        try:
+            selected_icon = self.IconPickerListBox.SelectedItem
+            if selected_icon:
+                # Set TextBox text
+                self.EditItemIconTxt.Text = selected_icon.PathVal
+                log_debug("Selected icon: " + selected_icon.PathVal)
+            
+            self.IconPickerOverlay.Visibility = Visibility.Collapsed
+        except Exception as ex:
+            log_debug("Error selecting icon: " + str(ex))
+
+    def on_icon_picker_cancel_clicked(self, sender, args):
+        try:
+            self.IconPickerOverlay.Visibility = Visibility.Collapsed
+            log_debug("Cancelled Icon Picker.")
+        except Exception as ex:
+            log_debug("Error cancelling Icon Picker: " + str(ex))
+
+    def on_icon_picker_double_click(self, sender, args):
+        self.on_icon_picker_select_clicked(None, None)
+
+    def on_add_builtin_clicked(self, sender, args):
+        """Switch to command picker tab and filter for Revit Ribbon commands."""
+        try:
+            self.picker_mode = "built_in"
+            self.SearchBox.Text = ""
+            self.filter_commands(None)
+            self.CustomizerTabControl.SelectedIndex = 2
+            log_debug(u"Switched to command picker tab and filtered for Revit Ribbon.")
         except Exception as ex:
             log_debug(u"Error in on_add_builtin_clicked: {}".format(safe_str(ex)))
             
@@ -2880,25 +3838,68 @@ class RadialMenuWindow(Window):
             }
             pool.append(new_item)
             save_config(self._config_data)
-            self.load_pool_list()
             self.load_layout_configuration()
+            self.load_pool_list()
             self.update_radial_geometry()
             
-            for i, p_item in enumerate(self.PoolListBox.ItemsSource):
-                if p_item._item == new_item:
-                    self.PoolListBox.SelectedIndex = i
-                    break
+            self.select_tree_node_by_item(new_item)
             log_debug(u"Added new submenu: {}".format(cmd_id))
         except Exception as ex:
             log_debug(u"Error in on_add_submenu_clicked: {}".format(safe_str(ex)))
             
+    def on_add_empty_clicked(self, sender, args):
+        """Add a new empty petal to the pool."""
+        try:
+            pool = self._config_data.get("command_pool", [])
+            base_id = "empty_petal"
+            cmd_id = base_id
+            existing_ids = {p.get("id", "") for p in pool}
+            counter = 1
+            while cmd_id in existing_ids:
+                cmd_id = "{}_{}".format(base_id, counter)
+                counter += 1
+                
+            l1_priorities = [p.get("priority", 0) for p in pool if p.get("level") == 1]
+            max_priority = max(l1_priorities) if l1_priorities else 0
+            new_item = {
+                "id": cmd_id,
+                "type": "built_in",
+                "name": "Empty Petal",
+                "command": "empty",
+                "icon": u"⚪",
+                "level": 1,
+                "parent": None,
+                "priority": max_priority + 10,
+                "context_rules": {}
+            }
+            pool.append(new_item)
+            save_config(self._config_data)
+            self.load_layout_configuration()
+            self.load_pool_list()
+            self.update_radial_geometry()
+            
+            self.select_tree_node_by_item(new_item)
+            log_debug(u"Added new empty petal: {}".format(cmd_id))
+        except Exception as ex:
+            log_debug(u"Error in on_add_empty_clicked: {}".format(safe_str(ex)))
+            
     def on_add_from_pyrevit_clicked(self, sender, args):
         try:
+            self.picker_mode = "all"
+            self.SearchBox.Text = ""
+            self.filter_commands(None)
             self.CustomizerTabControl.SelectedIndex = 2
-            log_debug(u"Switched to pyRevit command picker tab.")
+            log_debug(u"Switched to command picker tab (all commands).")
         except Exception as ex:
             log_debug(u"Error in on_add_from_pyrevit_clicked: {}".format(safe_str(ex)))
             
+    def on_picker_cancel_clicked(self, sender, args):
+        try:
+            self.CustomizerTabControl.SelectedIndex = 0
+            log_debug(u"Cancelled command picker, returned to pool.")
+        except Exception as ex:
+            log_debug(u"Error in on_picker_cancel_clicked: {}".format(safe_str(ex)))
+
     def on_picker_add_command_clicked(self, sender, args):
         try:
             selected_item = self.CommandTreeView.SelectedItem
@@ -2930,7 +3931,7 @@ class RadialMenuWindow(Window):
                     "type": "built_in",
                     "name": selected_item.Name,
                     "command": "submenu1",
-                    "icon": selected_item.IconPath or u"\u25B6",
+                    "icon": selected_item._icon_path or u"\u25B6",
                     "level": 1,
                     "parent": None,
                     "priority": max_priority + 10,
@@ -2966,17 +3967,14 @@ class RadialMenuWindow(Window):
                 save_config(self._config_data)
                 
                 self.CustomizerTabControl.SelectedIndex = 0
-                self.load_pool_list()
                 self.load_layout_configuration()
+                self.load_pool_list()
                 self.update_radial_geometry()
                 
-                for i, p_item in enumerate(self.PoolListBox.ItemsSource):
-                    if p_item._item == new_item:
-                        self.PoolListBox.SelectedIndex = i
-                        break
+                self.select_tree_node_by_item(new_item)
                 log_debug(u"Added pyRevit pulldown to pool: {}".format(selected_item.Name))
             else:
-                is_builtin = (getattr(selected_item, "Extension", None) == "Revit Built-in")
+                is_builtin = (getattr(selected_item, "Extension", None) in ["Revit Built-in", "Revit Ribbon"])
                 cmd_type = "built_in" if is_builtin else "pyrevit"
                 
                 existing_commands = {p.get("command", "") for p in pool if p.get("type") == cmd_type}
@@ -2989,7 +3987,7 @@ class RadialMenuWindow(Window):
                 if is_builtin and " (" in display_name:
                     display_name = display_name.split(" (")[0].strip()
                     
-                icon_val = selected_item.IconPath
+                icon_val = selected_item._icon_path
                 if is_builtin and icon_val:
                     if os.path.isabs(icon_val) and "extracted_icons" in icon_val:
                         parts = icon_val.split("extracted_icons")
@@ -3020,25 +4018,56 @@ class RadialMenuWindow(Window):
                 save_config(self._config_data)
                 
                 self.CustomizerTabControl.SelectedIndex = 0
-                self.load_pool_list()
                 self.load_layout_configuration()
+                self.load_pool_list()
                 self.update_radial_geometry()
                 
-                for i, p_item in enumerate(self.PoolListBox.ItemsSource):
-                    if p_item._item == new_item:
-                        self.PoolListBox.SelectedIndex = i
-                        break
+                self.select_tree_node_by_item(new_item)
                 log_debug(u"Added command '{}' (type: {}) to pool.".format(display_name, cmd_type))
         except Exception as ex:
             log_debug(u"Error in on_picker_add_command_clicked: {}".format(safe_str(ex)))
             
-    def on_delete_command_clicked(self, sender, args):
-        """Delete the selected command from the pool."""
+    def on_pool_list_button_click(self, sender, args):
+        """Handle button clicks routed from within the PoolListBox items (e.g. trash can delete button)."""
         try:
-            selected_wrapper = self.PoolListBox.SelectedItem
-            if not selected_wrapper:
+            button = args.OriginalSource
+            # Traverse visual tree up slightly if they clicked on the content inside button
+            from System.Windows.Controls import Button as wpf_button
+            from System.Windows.Media import VisualTreeHelper
+            dep = button
+            while dep is not None and not isinstance(dep, wpf_button):
+                dep = VisualTreeHelper.GetParent(dep)
+            if dep is not None and getattr(dep, "Name", None) == "BtnRowDelete":
+                args.Handled = True
+                wrapper = dep.DataContext
+                if wrapper:
+                    item = wrapper._item
+                    from pyrevit import forms
+                    if forms.alert(u"Delete command '{}' from pool?".format(item.get("name", "Unnamed")), yes=True, no=True):
+                        self.delete_pool_item(item)
+            elif dep is not None and getattr(dep, "Name", None) == "BtnRowEye":
+                args.Handled = True
+                wrapper = dep.DataContext
+                if wrapper:
+                    item = wrapper._item
+                    is_active = item.get("is_active", True)
+                    item["is_active"] = not is_active
+                    
+                    save_config(self._config_data)
+                    
+                    self.load_layout_configuration()
+                    self.load_pool_list()
+                    self.update_radial_geometry()
+                    
+                    log_debug(u"Toggled command '{}' active state to {}.".format(item.get("name"), item["is_active"]))
+        except Exception as ex:
+            log_debug("Error in on_pool_list_button_click: " + str(ex))
+
+    def delete_pool_item(self, item):
+        """Remove a command item from the pool, reset parent relationships, and refresh UI."""
+        try:
+            if not item:
                 return
-            item = selected_wrapper._item
             pool = self._config_data.get("command_pool", [])
             if item in pool:
                 pool.remove(item)
@@ -3052,26 +4081,49 @@ class RadialMenuWindow(Window):
                         p_item["level"] = 1
                 
             save_config(self._config_data)
-            self.load_pool_list()
             self.load_layout_configuration()
+            self.load_pool_list()
             self.update_radial_geometry()
             
-            self.hide_edit_panel()
-            self.PoolListBox.SelectedIndex = -1
+            # If we were editing this deleted item, hide edit panel
+            editing_item = getattr(self, "_editing_pool_item", None)
+            if editing_item == item:
+                self.hide_edit_panel()
+                self.clear_tree_selection()
+                
             log_debug(u"Deleted pool command: {}".format(item.get("name")))
+        except Exception as ex:
+            log_debug(u"Error in delete_pool_item: {}".format(safe_str(ex)))
+
+    def on_delete_command_clicked(self, sender, args):
+        """Legacy handler for the deleted delete button."""
+        try:
+            selected_wrapper = self.PoolTreeView.SelectedItem
+            if selected_wrapper:
+                self.delete_pool_item(selected_wrapper._item)
         except Exception as ex:
             log_debug(u"Error in on_delete_command_clicked: {}".format(safe_str(ex)))
 
     def classes_filter_predicate(self, item):
         try:
             box = getattr(self, "EditClassSearch", None) or getattr(self, "TxtClassSearch", None)
-            if not box:
-                return True
-            text = box.Text
-            if not text:
-                return True
-            query = text.lower().strip()
-            return query in item.Name.lower()
+            query = ""
+            if box:
+                text = box.Text
+                if text:
+                    query = text.lower().strip()
+            
+            if query:
+                return query in item.Name.lower()
+                
+            # If search query is empty, only show allowed/checked classes,
+            # classes that are part of the active selection (intersected classes),
+            # or the top common Revit classes/categories.
+            # This keeps the list small and fast, avoiding rendering 2,000 offscreen check boxes!
+            is_allowed = item.Name in getattr(self, "_allowed_classes_set", set())
+            is_intersected = item.Name in getattr(self, "_intersected_classes_set", set())
+            is_common = item.Name in COMMON_REVIT_CLASSES
+            return is_allowed or is_intersected or is_common
         except:
             return True
 
@@ -3081,6 +4133,14 @@ class RadialMenuWindow(Window):
                 self._classes_view.Refresh()
         except Exception as ex:
             log_debug(u"Error in on_context_class_search_changed: {}".format(safe_str(ex)))
+
+    def on_selection_checkbox_changed(self, sender, args):
+        try:
+            has_filtering = (self.EditChkPrehighlighted.IsChecked == True) or (self.EditChkSelection.IsChecked == True)
+            self.EditClassSearch.IsEnabled = has_filtering
+            self.EditClassList.IsEnabled = has_filtering
+        except Exception as ex:
+            log_debug("Error in on_selection_checkbox_changed: " + str(ex))
 
     def on_customizer_mouse_down(self, sender, args):
         try:
@@ -3118,10 +4178,10 @@ class RadialMenuWindow(Window):
                 current_view_category = "Sheet"
                 
             # 2. Get Selected Element Classes & Categories
-            sel_ids = uidoc.Selection.GetElementIds()
+            sel_ids = list(uidoc.Selection.GetElementIds())
             selected_classes = []
-            if sel_ids and sel_ids.Count > 0:
-                for eid in sel_ids:
+            if sel_ids:
+                for eid in sel_ids[:50]:
                     el = doc.GetElement(eid)
                     if el:
                         t = el.GetType()
@@ -3131,6 +4191,7 @@ class RadialMenuWindow(Window):
                             t = t.BaseType
                         if el.Category:
                             selected_classes.append(el.Category.Name)
+                            selected_classes.extend(get_english_names_for_category(el.Category))
             selected_classes = list(set(selected_classes))
             
             filtered = []
@@ -3410,6 +4471,8 @@ class RadialMenuWindow(Window):
             for cmd in all_cmds:
                 uid = getattr(cmd, "unique_id", None)
                 if uid:
+                    if uid.lower() in unique_ids:
+                        continue
                     cmds.append(cmd)
                     unique_ids.add(uid.lower())
         except Exception as ex:
@@ -3466,9 +4529,12 @@ class RadialMenuWindow(Window):
                             
                             clean_parts = []
                             for p in parts:
+                                p_lower = p.lower()
+                                if p_lower.endswith(".stack") or p_lower.endswith(".slideout") or any(p_lower.endswith(".stack{}".format(i)) for i in range(1, 10)):
+                                    continue
                                 stripped = p
                                 for suffix in [".extension", ".tab", ".panel", ".pulldown", ".splitbutton"] + list(suffixes):
-                                    if p.lower().endswith(suffix):
+                                    if p_lower.endswith(suffix):
                                         stripped = p[:-len(suffix)]
                                         break
                                 clean_parts.append(clean_id_part(stripped))
@@ -3496,6 +4562,13 @@ class RadialMenuWindow(Window):
 
     def load_pyrevit_commands(self):
         log_debug(u"Starting async load of pyRevit commands...")
+        try:
+            self._ribbon_commands = get_revit_ribbon_commands()
+            log_debug(u"Pre-loaded {} Ribbon commands on UI thread.".format(len(self._ribbon_commands)))
+        except Exception as ex:
+            self._ribbon_commands = []
+            log_debug(u"Error pre-loading Ribbon commands: {}".format(safe_str(ex)))
+            
         t = threading.Thread(target=self._async_load_commands_worker)
         t.daemon = True
         t.start()
@@ -3505,11 +4578,17 @@ class RadialMenuWindow(Window):
             all_cmds = self.find_all_commands_safe()
             
             parsed_list = []
+            seen_uids = set()
             for cmd in all_cmds:
                 if not cmd.unique_id:
                     continue
                 if cmd.unique_id == "radialmenu_radialmenu_radialmenu_toggleradialmenu":
                     continue
+                
+                uid_lower = cmd.unique_id.lower()
+                if uid_lower in seen_uids:
+                    continue
+                seen_uids.add(uid_lower)
                 
                 # 1. Parse Title safely
                 title = getattr(cmd, "title", None) or getattr(cmd, "name", None) or getattr(cmd, "bundle", None) or u"Unknown Command"
@@ -3536,63 +4615,104 @@ class RadialMenuWindow(Window):
                     "pulldown_name": pulldown_name
                 })
                 
-            # 4. Load Revit Built-in Commands from extracted_icons folder
+            # 4. Load Revit Built-in Commands using the pre-loaded Ribbon structure
             try:
                 icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
+                ribbon_cmds = getattr(self, "_ribbon_commands", [])
+                log_debug(u"Processing {} Ribbon commands in worker...".format(len(ribbon_cmds)))
+                
+                # Build signatures of discovered pyRevit commands to filter them out of Revit Ribbon list
+                pyrevit_sigs = set()
+                for p_cmd in parsed_list:
+                    t_clean = "".join(c for c in p_cmd["title"].lower() if c.isalnum())
+                    tab_clean = "".join(c for c in p_cmd["tab_name"].lower() if c.isalnum())
+                    pd_clean = "".join(c for c in (p_cmd["pulldown_name"] or "").lower() if c.isalnum())
+                    pyrevit_sigs.add((t_clean, tab_clean, pd_clean))
+                    if not pd_clean:
+                        pyrevit_sigs.add((t_clean, tab_clean, ""))
+                
+                seen_ribbon_ids = set()
+                for r_cmd in ribbon_cmds:
+                    cmd_id = r_cmd["id"]
+                    title = r_cmd["title"]
+                    tab_name = r_cmd["tab"]
+                    panel_name = r_cmd["panel"]
+                    
+                    # Clean properties of Ribbon command
+                    r_title_clean = "".join(c for c in title.lower() if c.isalnum())
+                    r_tab_clean = "".join(c for c in tab_name.lower() if c.isalnum())
+                    r_panel_clean = "".join(c for c in panel_name.lower() if c.isalnum())
+                    
+                    is_pyrevit_match = False
+                    if (r_title_clean, r_tab_clean, r_panel_clean) in pyrevit_sigs:
+                        is_pyrevit_match = True
+                    elif (r_title_clean, r_tab_clean, "") in pyrevit_sigs:
+                        is_pyrevit_match = True
+                        
+                    if not is_pyrevit_match:
+                        # Fallback match: if pyRevit command unique_id matches a substring of the Ribbon ID
+                        r_id_clean = "".join(c for c in cmd_id.lower() if c.isalnum())
+                        for p_cmd in parsed_list:
+                            uid_clean = "".join(c for c in p_cmd["unique_id"].lower() if c.isalnum())
+                            if uid_clean in r_id_clean:
+                                is_pyrevit_match = True
+                                break
+                                
+                    if is_pyrevit_match:
+                        continue
+                    
+                    seen_ribbon_ids.add(cmd_id.lower())
+                    
+                    # Find matching icon file in extracted_icons
+                    safe_filename = "".join([c for c in cmd_id if c.isalnum() or c in ("_", "-")]).strip()
+                    icon_path = os.path.join(icons_dir, safe_filename + ".png")
+                    if not os.path.exists(icon_path):
+                        icon_path = None
+                        
+                    parsed_list.append({
+                        "title": u"{} ({})".format(title, cmd_id),
+                        "unique_id": cmd_id,
+                        "icon_path": resolve_themed_icon(icon_path) if icon_path else None,
+                        "ext_name": u"Revit Ribbon",
+                        "tab_name": tab_name,
+                        "pulldown_name": panel_name
+                    })
+                
+                # 5. Load remaining offline/unused icons from extracted_icons folder as fallback
                 if os.path.exists(icons_dir):
-                    built_in_cmds_count = 0
+                    fallback_count = 0
                     for filename in os.listdir(icons_dir):
                         if filename.lower().endswith(".png") and not filename.lower().endswith(".dark.png"):
-                            cmd_id = filename[:-4] # Remove .png
-                            
-                            name_part = cmd_id
-                            if name_part.startswith("ID_"):
-                                name_part = name_part[3:]
-                            
-                            tab_name = u"Other Commands"
-                            if cmd_id.startswith("ID_OBJECTS_"):
-                                tab_name = u"Model Elements"
-                            elif cmd_id.startswith("ID_RBS_") or "DUCT" in cmd_id or "PIPE" in cmd_id or "CABLE" in cmd_id or "CONDUIT" in cmd_id:
-                                tab_name = u"Systems (MEP)"
-                            elif cmd_id.startswith("ID_VIEW_") or cmd_id.startswith("ID_WINDOW_") or "VIEW" in cmd_id:
-                                tab_name = u"Views"
-                            elif cmd_id.startswith("ID_ANNOTATIONS_") or cmd_id.startswith("ID_ANNOTATE_") or "DIMENSION" in cmd_id:
-                                tab_name = u"Annotations"
-                            elif cmd_id.startswith("ID_EDIT_") or cmd_id.startswith("ID_BUTTON_") or cmd_id.startswith("ID_MODIFY_") or "ALIGN" in cmd_id or "CUT" in cmd_id or "JOIN" in cmd_id:
-                                tab_name = u"Modify"
-                            elif cmd_id.startswith("ID_FILE_") or cmd_id.startswith("ID_APP_") or "SAVE" in cmd_id or "OPEN" in cmd_id:
-                                tab_name = u"File"
-                            elif cmd_id.startswith("ID_SETTINGS_") or cmd_id.startswith("ID_TOOL_") or cmd_id.startswith("ID_PREFERENCES_"):
-                                tab_name = u"Settings"
+                            cmd_id = filename[:-4]
+                            if cmd_id.lower() not in seen_ribbon_ids:
+                                name_part = cmd_id
+                                if name_part.startswith("ID_"):
+                                    name_part = name_part[3:]
+                                prefixes_to_clean = ["OBJECTS_", "RBS_", "ANNOTATIONS_", "ANNOTATE_", "VIEW_", "EDIT_", "FILE_", "SETTINGS_", "BUTTON_", "MODIFY_", "WINDOW_"]
+                                for prefix in prefixes_to_clean:
+                                    if name_part.startswith(prefix):
+                                        name_part = name_part[len(prefix):]
+                                        break
+                                words = name_part.split("_")
+                                clean_words = []
+                                for w in words:
+                                    if w and w not in clean_words:
+                                        clean_words.append(w)
+                                formatted_title = " ".join(clean_words).title()
                                 
-                            prefixes_to_clean = ["OBJECTS_", "RBS_", "ANNOTATIONS_", "ANNOTATE_", "VIEW_", "EDIT_", "FILE_", "SETTINGS_", "BUTTON_", "MODIFY_", "WINDOW_"]
-                            for prefix in prefixes_to_clean:
-                                if name_part.startswith(prefix):
-                                    name_part = name_part[len(prefix):]
-                                    break
-                                    
-                            words = name_part.split("_")
-                            clean_words = []
-                            for w in words:
-                                if w and w not in clean_words:
-                                    clean_words.append(w)
-                            formatted_title = " ".join(clean_words).title()
-                            
-                            display_title = u"{} ({})".format(formatted_title, cmd_id)
-                            icon_full_path = os.path.join(icons_dir, filename)
-                            
-                            parsed_list.append({
-                                "title": display_title,
-                                "unique_id": cmd_id,
-                                "icon_path": icon_full_path,
-                                "ext_name": u"Revit Built-in",
-                                "tab_name": tab_name,
-                                "pulldown_name": None
-                            })
-                            built_in_cmds_count += 1
-                    log_debug(u"Loaded {} Revit Built-in commands from extracted_icons.".format(built_in_cmds_count))
+                                parsed_list.append({
+                                    "title": u"{} ({})".format(formatted_title, cmd_id),
+                                    "unique_id": cmd_id,
+                                    "icon_path": resolve_themed_icon(os.path.join(icons_dir, filename)),
+                                    "ext_name": u"Revit Ribbon",
+                                    "tab_name": u"Other Commands",
+                                    "pulldown_name": u"Unsorted"
+                                })
+                                fallback_count += 1
+                    if fallback_count > 0:
+                        log_debug(u"Loaded {} additional Revit commands from extracted_icons as fallback.".format(fallback_count))
             except Exception as e_builtin:
-                log_debug(u"Failed to load Revit Built-in commands: {}".format(safe_str(e_builtin)))
+                log_debug(u"Failed to load Revit Ribbon commands in worker: {}".format(safe_str(e_builtin)))
                 
             self._all_commands = parsed_list
             
@@ -3621,7 +4741,16 @@ class RadialMenuWindow(Window):
             
             # Step 1: Filter flat list of commands matching query
             filtered_cmds = []
+            mode = getattr(self, "picker_mode", "all")
             for cmd in self._all_commands:
+                ext_name = cmd["ext_name"]
+                
+                # Filter by picker mode: built_in shows only Revit Ribbon, pyrevit excludes Revit Ribbon
+                if mode == "built_in" and ext_name != u"Revit Ribbon":
+                    continue
+                if mode == "pyrevit" and ext_name == u"Revit Ribbon":
+                    continue
+                    
                 match = (not query or 
                          query in cmd["title"].lower() or 
                          query in cmd["ext_name"].lower() or 
@@ -3650,12 +4779,10 @@ class RadialMenuWindow(Window):
             from System.Collections.ObjectModel import ObservableCollection
             root_collection = ObservableCollection[object]()
             
-            for ext_name in sorted(tree_data.keys()):
-                should_expand = bool(query)
-                ext_item = TreeItem(ext_name, is_command=False, is_expanded=should_expand)
-                root_collection.Add(ext_item)
-                
-                tabs = tree_data[ext_name]
+            should_expand = bool(query)
+            
+            # Helper function to populate tabs/commands under an extension item
+            def populate_ext_children(ext_item, tabs):
                 for tab_name in sorted(tabs.keys()):
                     tab_item = TreeItem(tab_name, is_command=False, is_expanded=should_expand)
                     ext_item.Children.Add(tab_item)
@@ -3720,10 +4847,337 @@ class RadialMenuWindow(Window):
                                 extension=c_info["ext_name"]
                             )
                             tab_item.Children.Add(c_item)
-                            
+
+            # Revit Ribbon root node (if present)
+            if "Revit Ribbon" in tree_data:
+                ribbon_root = TreeItem("Revit Ribbon", is_command=False, is_expanded=should_expand)
+                root_collection.Add(ribbon_root)
+                populate_ext_children(ribbon_root, tree_data["Revit Ribbon"])
+                
+            # pyRevit root node (if there are other extensions present)
+            pyrevit_ext_names = sorted([name for name in tree_data.keys() if name != "Revit Ribbon"])
+            if pyrevit_ext_names:
+                pyrevit_root = TreeItem("pyRevit", is_command=False, is_expanded=should_expand)
+                root_collection.Add(pyrevit_root)
+                for ext_name in pyrevit_ext_names:
+                    ext_item = TreeItem(ext_name, is_command=False, is_expanded=should_expand)
+                    pyrevit_root.Children.Add(ext_item)
+                    populate_ext_children(ext_item, tree_data[ext_name])
+                    
             self.CommandTreeView.ItemsSource = root_collection
         except Exception as ex:
             log_debug(u"Error filtering commands: {}".format(safe_str(ex)))
+
+    def on_pool_mouse_down(self, sender, args):
+        try:
+            dep = args.OriginalSource
+            if dep is not None and hasattr(dep, "DataContext") and isinstance(dep.DataContext, PoolListItem):
+                self._pool_drag_start = args.GetPosition(None)
+            else:
+                self._pool_drag_start = None
+        except Exception as ex:
+            log_debug("Error in on_pool_mouse_down: " + str(ex))
+            self._pool_drag_start = args.GetPosition(None)
+
+    def on_pool_mouse_move(self, sender, args):
+        try:
+            if args.LeftButton == wpf_input.MouseButtonState.Pressed:
+                pos = args.GetPosition(None)
+                start_pos = getattr(self, "_pool_drag_start", None)
+                if not start_pos:
+                    return
+                
+                dx = abs(pos.X - start_pos.X)
+                dy = abs(pos.Y - start_pos.Y)
+                
+                if dx > SystemParameters.MinimumHorizontalDragDistance or dy > SystemParameters.MinimumVerticalDragDistance:
+                    wrapper = self.PoolTreeView.SelectedItem
+                    if wrapper and isinstance(wrapper, PoolListItem):
+                        item = wrapper._item
+                        log_debug(u"Starting drag from pool tree for: {}".format(item.get("name")))
+                        
+                        # Set up the drag preview popup
+                        try:
+                            self._init_drag_preview()
+                            if getattr(self, "DragPreviewPopup", None):
+                                icon = item.get("icon", "")
+                                is_image = False
+                                if icon:
+                                    lower_icon = icon.lower()
+                                    if (".png" in lower_icon or ".jpg" in lower_icon or ".jpeg" in lower_icon or "pack://application" in lower_icon or "file:" in lower_icon):
+                                        is_image = True
+                                        
+                                if is_image:
+                                    try:
+                                        from System.Windows.Media.Imaging import BitmapImage
+                                        from System import Uri
+                                        self.DragPreviewIconImage.Source = BitmapImage(Uri(icon))
+                                        self.DragPreviewIconImage.Visibility = System.Windows.Visibility.Visible
+                                        self.DragPreviewIconText.Visibility = System.Windows.Visibility.Collapsed
+                                    except:
+                                        self.DragPreviewIconImage.Visibility = System.Windows.Visibility.Collapsed
+                                        self.DragPreviewIconText.Visibility = System.Windows.Visibility.Collapsed
+                                elif icon:
+                                    self.DragPreviewIconText.Text = icon
+                                    self.DragPreviewIconText.Visibility = System.Windows.Visibility.Visible
+                                    self.DragPreviewIconImage.Visibility = System.Windows.Visibility.Collapsed
+                                else:
+                                    self.DragPreviewIconText.Visibility = System.Windows.Visibility.Collapsed
+                                    self.DragPreviewIconImage.Visibility = System.Windows.Visibility.Collapsed
+                                    
+                                self.DragPreviewText.Text = item.get("name", "")
+                                self.DragPreviewPopup.HorizontalOffset = dx + 15
+                                self.DragPreviewPopup.VerticalOffset = dy + 15
+                                self.DragPreviewPopup.IsOpen = True
+                        except Exception as p_ex:
+                            log_debug("Failed to show drag preview: " + str(p_ex))
+
+                        import json
+                        cmd_dict = {
+                            "name": item.get("name"),
+                            "unique_id": item.get("command"),
+                            "extension": item.get("extension", "pyRevit"),
+                            "icon_path": item.get("icon"),
+                            "is_pulldown": item.get("command") in ["submenu1", "submenu2"],
+                            "is_from_pool": True,
+                            "pool_item_id": item.get("id")
+                        }
+                        cmd_json = json.dumps(cmd_dict)
+                        drag_data = System.Windows.DataObject("PyRevitCommandJSON", cmd_json)
+                        System.Windows.DragDrop.DoDragDrop(self.PoolTreeView, drag_data, System.Windows.DragDropEffects.Copy)
+                        self.clear_drag_feedback()
+        except Exception as ex:
+            log_debug(u"Error in on_pool_mouse_move: {}".format(safe_str(ex)))
+
+    def _init_drag_preview(self):
+        try:
+            if not hasattr(self, "DragPreviewPopup") or not self.DragPreviewPopup:
+                popup = self.FindName("DragPreviewPopup")
+                if popup:
+                    self.DragPreviewPopup = popup
+                    self.DragPreviewIconImage = popup.FindName("DragPreviewIconImage")
+                    self.DragPreviewIconText = popup.FindName("DragPreviewIconText")
+                    self.DragPreviewText = popup.FindName("DragPreviewText")
+                else:
+                    self.DragPreviewPopup = None
+        except Exception as ex:
+            log_debug("Error in _init_drag_preview: " + str(ex))
+
+    def clear_drag_feedback(self):
+        try:
+            self._init_drag_preview()
+            if getattr(self, "DragPreviewPopup", None):
+                self.DragPreviewPopup.IsOpen = False
+                
+            if hasattr(self, "_active_drag_tvi") and self._active_drag_tvi:
+                self._active_drag_tvi.BorderThickness = Thickness(0)
+                self._active_drag_tvi.BorderBrush = self._brush_transparent
+                self._active_drag_tvi.Background = self._brush_transparent
+                self._active_drag_tvi = None
+                self._active_drop_pos = None
+        except:
+            pass
+
+    def on_pool_tree_drag_leave(self, sender, args):
+        self.clear_drag_feedback()
+
+    def on_pool_tree_drag_over(self, sender, args):
+        if not args.Data.GetDataPresent("PyRevitCommandJSON"):
+            args.Effects = getattr(System.Windows.DragDropEffects, "None")
+            args.Handled = True
+            return
+            
+        args.Effects = System.Windows.DragDropEffects.Copy
+        args.Handled = True
+        
+        try:
+            # Update Drag Preview position relative to PoolTreeView
+            self._init_drag_preview()
+            if getattr(self, "DragPreviewPopup", None):
+                pos = args.GetPosition(self.PoolTreeView)
+                self.DragPreviewPopup.HorizontalOffset = pos.X + 15
+                self.DragPreviewPopup.VerticalOffset = pos.Y + 15
+            
+            dep = args.OriginalSource
+            target_tvi = None
+            while dep is not None:
+                if isinstance(dep, TreeViewItem):
+                    target_tvi = dep
+                    break
+                dep = VisualTreeHelper.GetParent(dep)
+                
+            if target_tvi:
+                point = args.GetPosition(target_tvi)
+                item_height = target_tvi.ActualHeight
+                if item_height <= 0:
+                    item_height = 32
+                    
+                target_wrapper = target_tvi.DataContext
+                if not target_wrapper or not isinstance(target_wrapper, PoolListItem):
+                    self.clear_drag_feedback()
+                    return
+                    
+                target_item = target_wrapper._item
+                is_submenu = target_item.get("command") in ["submenu1", "submenu2"]
+                
+                # Determine drop position (Before, After, or Inside)
+                if is_submenu:
+                    if point.Y < item_height * 0.25:
+                        drop_pos = "Before"
+                    elif point.Y > item_height * 0.75:
+                        drop_pos = "After"
+                    else:
+                        drop_pos = "Inside"
+                else:
+                    if point.Y < item_height * 0.5:
+                        drop_pos = "Before"
+                    else:
+                        drop_pos = "After"
+                        
+                # Update visuals if target or position changed
+                active_tvi = getattr(self, "_active_drag_tvi", None)
+                active_pos = getattr(self, "_active_drop_pos", None)
+                
+                if target_tvi != active_tvi or drop_pos != active_pos:
+                    if active_tvi and active_tvi != target_tvi:
+                        active_tvi.BorderThickness = Thickness(0)
+                        active_tvi.BorderBrush = self._brush_transparent
+                        active_tvi.Background = self._brush_transparent
+                        
+                    self._active_drag_tvi = target_tvi
+                    self._active_drop_pos = drop_pos
+                    
+                    if drop_pos == "Before":
+                        target_tvi.BorderThickness = Thickness(0, 2.5, 0, 0)
+                        target_tvi.BorderBrush = self._brush_accent
+                        target_tvi.Background = self._brush_before_after
+                    elif drop_pos == "After":
+                        target_tvi.BorderThickness = Thickness(0, 0, 0, 2.5)
+                        target_tvi.BorderBrush = self._brush_accent
+                        target_tvi.Background = self._brush_before_after
+                    elif drop_pos == "Inside":
+                        target_tvi.BorderThickness = Thickness(0)
+                        target_tvi.BorderBrush = self._brush_transparent
+                        target_tvi.Background = self._brush_inside
+            else:
+                self.clear_drag_feedback()
+        except Exception as ex:
+            pass
+
+    def on_pool_tree_drop(self, sender, args):
+        if not args.Data.GetDataPresent("PyRevitCommandJSON"):
+            self.clear_drag_feedback()
+            return
+            
+        cmd_json = args.Data.GetData("PyRevitCommandJSON")
+        try:
+            import json
+            cmd_data = json.loads(cmd_json)
+            
+            if not cmd_data.get("is_from_pool"):
+                self.clear_drag_feedback()
+                return
+                
+            pool_item_id = cmd_data.get("pool_item_id")
+            if not pool_item_id:
+                self.clear_drag_feedback()
+                return
+                
+            pool = self._config_data.setdefault("command_pool", [])
+            
+            # Find the dragged item in the pool
+            dragged_item = None
+            for item in pool:
+                if item.get("id") == pool_item_id:
+                    dragged_item = item
+                    break
+                    
+            if not dragged_item:
+                self.clear_drag_feedback()
+                return
+                
+            # Get target item and position from the active drag feedback
+            target_tvi = getattr(self, "_active_drag_tvi", None)
+            drop_pos = getattr(self, "_active_drop_pos", None)
+            
+            # Resolve target wrapper
+            target_wrapper = target_tvi.DataContext if target_tvi else None
+            
+            # 1. Dropped onto empty space
+            if not target_wrapper or not isinstance(target_wrapper, PoolListItem):
+                # Exclude from submenu: move to level 1, parent = None
+                dragged_item["level"] = 1
+                dragged_item["parent"] = None
+                
+                # Move to the end of the pool list
+                if dragged_item in pool:
+                    pool.remove(dragged_item)
+                pool.append(dragged_item)
+                
+                log_debug(u"Moved item '{}' to Level 1 (excluded from submenu).".format(dragged_item.get("name")))
+                
+            # 2. Dropped onto another item
+            else:
+                target_item = target_wrapper._item
+                if target_item.get("id") == dragged_item.get("id"):
+                    self.clear_drag_feedback()
+                    return
+                    
+                # A. Dropped INSIDE a submenu: Add to this submenu!
+                if drop_pos == "Inside":
+                    is_dragged_submenu = dragged_item.get("command") in ["submenu1", "submenu2"]
+                    if is_dragged_submenu:
+                        from pyrevit import forms
+                        forms.toast("Cannot nest submenus inside submenus.", title="Radial Menu")
+                        self.clear_drag_feedback()
+                        return
+                        
+                    # Add to submenu
+                    target_level = target_item.get("level", 1)
+                    dragged_item["level"] = target_level + 1
+                    dragged_item["parent"] = target_item.get("id")
+                    
+                    # Place at the end of the submenu's children
+                    if dragged_item in pool:
+                        pool.remove(dragged_item)
+                    # Insert after the target_item in list order
+                    t_idx = pool.index(target_item)
+                    pool.insert(t_idx + 1, dragged_item)
+                    
+                    log_debug(u"Added item '{}' to submenu '{}'.".format(dragged_item.get("name"), target_item.get("name")))
+                    
+                # B. Dropped BEFORE or AFTER an item
+                else:
+                    # Inherit parent and level from target item
+                    dragged_item["level"] = target_item.get("level", 1)
+                    dragged_item["parent"] = target_item.get("parent")
+                    
+                    if dragged_item in pool:
+                        pool.remove(dragged_item)
+                        
+                    t_idx = pool.index(target_item)
+                    if drop_pos == "Before":
+                        pool.insert(t_idx, dragged_item)
+                        log_debug(u"Reordered item '{}' before '{}'.".format(dragged_item.get("name"), target_item.get("name")))
+                    else:
+                        pool.insert(t_idx + 1, dragged_item)
+                        log_debug(u"Reordered item '{}' after '{}'.".format(dragged_item.get("name"), target_item.get("name")))
+            
+            # Recalculate priorities based on new list order
+            for idx, item in enumerate(pool):
+                item["priority"] = (idx + 1) * 10
+                
+            # Save configuration and reload UI
+            save_config(self._config_data)
+            self.load_layout_configuration()
+            self.load_pool_list()
+            self.update_radial_geometry()
+            
+        except Exception as ex:
+            log_debug(u"Error in on_pool_tree_drop: {}".format(safe_str(ex)))
+        
+        self.clear_drag_feedback()
+        args.Handled = True
 
     def on_tree_mouse_down(self, sender, args):
         self._drag_start_point = args.GetPosition(None)
@@ -3750,7 +5204,7 @@ class RadialMenuWindow(Window):
                             "name": cmd_item.Name,
                             "unique_id": cmd_item.UniqueId,
                             "extension": cmd_item.Extension,
-                            "icon_path": cmd_item.IconPath,
+                            "icon_path": cmd_item._icon_path,
                             "is_pulldown": getattr(cmd_item, "IsPulldown", False)
                         }
                         cmd_json = json.dumps(cmd_dict)
@@ -3783,26 +5237,84 @@ class RadialMenuWindow(Window):
 
     def assign_command_to_slot_data(self, slot_num, cmd_data):
         try:
+            # Check if we are dragging an existing pool item
+            is_from_pool = cmd_data.get("is_from_pool", False)
+            pool_item_id = cmd_data.get("pool_item_id")
+            
+            # Find the dragged item in the pool
+            dragged_item = None
+            pool = self._config_data.setdefault("command_pool", [])
+            if is_from_pool and pool_item_id:
+                for item in pool:
+                    if item.get("id") == pool_item_id:
+                        dragged_item = item
+                        break
+                        
             btn_name = SLOT_BUTTONS.get(slot_num)
             pool_item = getattr(self, "_button_to_pool_item", {}).get(btn_name)
             
+            # Determine target properties
+            if 1 <= slot_num <= 10:
+                target_level = 1
+                target_parent = None
+                target_priority = slot_num * 10
+            elif 11 <= slot_num <= 20:
+                target_level = 2
+                target_parent = getattr(self, "_active_l1_parent", "submenu1") or "submenu1"
+                target_priority = (slot_num - 10) * 10
+            else:
+                target_level = 3
+                target_parent = getattr(self, "_active_l2_parent", "submenu2") or "submenu2"
+                target_priority = (slot_num - 20) * 10
+                
+            if pool_item:
+                target_level = pool_item.get("level", target_level)
+                target_parent = pool_item.get("parent", target_parent)
+                target_priority = pool_item.get("priority", target_priority)
+                
+            if dragged_item:
+                # We are moving an existing pool item!
+                # If there's a target item currently in that slot, swap their positions!
+                if pool_item and pool_item != dragged_item:
+                    # Save dragged item's current position
+                    orig_level = dragged_item.get("level", 1)
+                    orig_parent = dragged_item.get("parent")
+                    orig_priority = dragged_item.get("priority", 0)
+                    
+                    # Update dragged item to target position
+                    dragged_item["level"] = target_level
+                    dragged_item["parent"] = target_parent
+                    dragged_item["priority"] = target_priority
+                    
+                    # Update target item to dragged item's original position
+                    pool_item["level"] = orig_level
+                    pool_item["parent"] = orig_parent
+                    pool_item["priority"] = orig_priority
+                    
+                    log_debug(u"Swapped pool item '{}' with '{}'.".format(dragged_item.get("name"), pool_item.get("name")))
+                else:
+                    # Target slot is empty, just move dragged item there
+                    dragged_item["level"] = target_level
+                    dragged_item["parent"] = target_parent
+                    dragged_item["priority"] = target_priority
+                    log_debug(u"Moved pool item '{}' to slot {}.".format(dragged_item.get("name"), slot_num))
+                    
+                # Save config and refresh everything
+                save_config(self._config_data)
+                self.load_layout_configuration()
+                self.update_radial_geometry()
+                self.load_pool_list()
+                return
+
+            # If not dragging from pool, we use the normal assignment/overwrite logic
             if pool_item:
                 level = pool_item.get("level", 1)
                 parent = pool_item.get("parent")
                 priority = pool_item.get("priority", slot_num * 10)
             else:
-                if 1 <= slot_num <= 10:
-                    level = 1
-                    parent = None
-                    priority = slot_num * 10
-                elif 11 <= slot_num <= 20:
-                    level = 2
-                    parent = getattr(self, "_active_l1_parent", "submenu1") or "submenu1"
-                    priority = (slot_num - 10) * 10
-                else:
-                    level = 3
-                    parent = getattr(self, "_active_l2_parent", "submenu2") or "submenu2"
-                    priority = (slot_num - 20) * 10
+                level = target_level
+                parent = target_parent
+                priority = target_priority
 
             is_pulldown = cmd_data.get("is_pulldown", False)
             pulldown_id = cmd_data["unique_id"]
@@ -3852,19 +5364,37 @@ class RadialMenuWindow(Window):
                 
                 # Add child commands to the next level
                 next_level = level + 1
-                for idx, child in enumerate(child_cmds[:10]):  # Max 10 items per level
-                    new_child = {
-                        "id": child["unique_id"],
-                        "type": "pyrevit",
-                        "name": child["title"],
-                        "command": child["unique_id"],
-                        "icon": child["icon_path"] or "",
-                        "level": next_level,
-                        "parent": pulldown_id,
-                        "priority": (idx + 1) * 10,
-                        "context_rules": {}
-                    }
-                    pool.append(new_child)
+                custom_children = cmd_data.get("children", [])
+                if custom_children:
+                    for idx, child in enumerate(custom_children[:10]):  # Max 10 items per level
+                        child_uid = child["unique_id"]
+                        child_type = "pyrevit" if "customctrl_%" in child_uid.lower() else "built_in"
+                        new_child = {
+                            "id": child_uid,
+                            "type": child_type,
+                            "name": child["name"],
+                            "command": child_uid,
+                            "icon": child.get("icon_path") or "",
+                            "level": next_level,
+                            "parent": pulldown_id,
+                            "priority": (idx + 1) * 10,
+                            "context_rules": {}
+                        }
+                        pool.append(new_child)
+                else:
+                    for idx, child in enumerate(child_cmds[:10]):  # Max 10 items per level
+                        new_child = {
+                            "id": child["unique_id"],
+                            "type": "pyrevit",
+                            "name": child["title"],
+                            "command": child["unique_id"],
+                            "icon": child["icon_path"] or "",
+                            "level": next_level,
+                            "parent": pulldown_id,
+                            "priority": (idx + 1) * 10,
+                            "context_rules": {}
+                        }
+                        pool.append(new_child)
                 
                 self._config_data["command_pool"] = pool
                 save_config(self._config_data)
@@ -3872,7 +5402,7 @@ class RadialMenuWindow(Window):
                 self.update_radial_geometry()
                 log_debug(u"Assigned pulldown '{}' as submenu with {} children.".format(cmd_data["name"], len(child_cmds)))
             else:
-                is_builtin = (cmd_data.get("extension") == "Revit Built-in")
+                is_builtin = (cmd_data.get("extension") in ["Revit Built-in", "Revit Ribbon"])
                 cmd_type = "built_in" if is_builtin else "pyrevit"
                 
                 display_name = cmd_data["name"]
@@ -3915,6 +5445,224 @@ class RadialMenuWindow(Window):
                     log_debug(u"Created new pool item for slot {} with command '{}' (type: {}).".format(slot_num, display_name, cmd_type))
         except Exception as ex:
             log_debug(u"Failed to assign command to slot: {}".format(safe_str(ex)))
+            
+    def on_input_manager_pre_notify(self, sender, args):
+        try:
+            if not getattr(self, "customizer_mode", False) or not getattr(self, "_move_mode_active", False):
+                return
+            if not args or not args.StagingItem or not args.StagingItem.Input:
+                return
+            e = args.StagingItem.Input
+            
+            from System.Windows.Input import MouseButtonEventArgs, MouseEventArgs, MouseButtonState, MouseButton
+            
+            # Check for mouse down
+            if isinstance(e, MouseButtonEventArgs) and e.RoutedEvent and e.RoutedEvent.Name == "PreviewMouseDown":
+                if e.ChangedButton == MouseButton.Left:
+                    self._ribbon_drag_start = System.Windows.Input.Mouse.GetPosition(None)
+                    self._ribbon_dragged_item = None
+                    
+                    dep = e.OriginalSource
+                    log_debug("PreviewMouseDown source: {} ({})".format(str(dep), type(dep).__name__))
+                    import System.Windows.Media as media
+                    
+                    best_match = None
+                    while dep is not None:
+                        # Check both the DataContext and the visual element itself
+                        candidates = []
+                        if hasattr(dep, "DataContext") and dep.DataContext:
+                            candidates.append(dep.DataContext)
+                        candidates.append(dep)
+                        
+                        for candidate in candidates:
+                            try:
+                                c_type = candidate.GetType()
+                                c_type_name = c_type.FullName
+                                c_ns = c_type.Namespace or ""
+                                if "Autodesk.Windows" in c_ns:
+                                    is_pulldown = (
+                                        "RibbonSplitButton" in c_type_name 
+                                        or "RibbonListButton" in c_type_name 
+                                        or "RibbonGallery" in c_type_name
+                                    )
+                                    is_btn = (
+                                        "RibbonButton" in c_type_name 
+                                        or "RibbonCommandItem" in c_type_name 
+                                        or "RibbonItem" in c_type_name
+                                    )
+                                    if (is_pulldown or is_btn) and getattr(candidate, "Id", None):
+                                        if is_pulldown:
+                                            best_match = candidate
+                                            break  # Found the container, stop looking at this element's candidates
+                                        elif best_match is None:
+                                            best_match = candidate
+                            except Exception as c_ex:
+                                log_debug("Candidate check failed: " + str(c_ex))
+                                pass
+                                
+                        # If we found a pulldown container, we can stop traversing higher up the visual tree
+                        if best_match:
+                            bm_type_name = best_match.GetType().Name
+                            if "RibbonSplitButton" in bm_type_name or "RibbonListButton" in bm_type_name or "RibbonGallery" in bm_type_name:
+                                break
+                                
+                        if isinstance(dep, media.Visual) or hasattr(media.VisualTreeHelper, "GetParent"):
+                            try:
+                                dep = media.VisualTreeHelper.GetParent(dep)
+                            except Exception as tree_ex:
+                                log_debug("GetParent failed: " + str(tree_ex))
+                                break
+                        else:
+                            break
+                            
+                    if best_match:
+                        self._ribbon_dragged_item = best_match
+                        log_debug("Found Ribbon Item! Id={}, Type={}".format(best_match.Id, best_match.GetType().Name))
+                            
+            # Check for mouse move
+            elif isinstance(e, MouseEventArgs) and e.RoutedEvent and e.RoutedEvent.Name == "PreviewMouseMove":
+                if not getattr(self, "_ribbon_dragged_item", None):
+                    return
+                    
+                if e.LeftButton != MouseButtonState.Pressed:
+                    self._ribbon_dragged_item = None
+                    return
+                    
+                pos = System.Windows.Input.Mouse.GetPosition(None)
+                start_pos = getattr(self, "_ribbon_drag_start", None)
+                if not start_pos:
+                    return
+                    
+                from System.Windows import SystemParameters
+                diff_x = abs(pos.X - start_pos.X)
+                diff_y = abs(pos.Y - start_pos.Y)
+                
+                if diff_x > SystemParameters.MinimumHorizontalDragDistance or diff_y > SystemParameters.MinimumVerticalDragDistance:
+                    item = self._ribbon_dragged_item
+                    self._ribbon_dragged_item = None # Reset immediately to prevent multiple triggers
+                    
+                    item_id = getattr(item, "Id", None)
+                    if not item_id:
+                        return
+                        
+                    # Mark the event as Handled so Revit doesn't also process mouse movement (e.g. dragging panels)
+                    e.Handled = True
+                    
+                    item_text = getattr(item, "Text", "Command")
+                    item_name = item_text.replace("\n", " ").replace("\r", " ").strip()
+                    
+                    is_pyrevit = "customctrl_%customctrl_%" in item_id.lower()
+                    pyrevit_unique_id = None
+                    
+                    if is_pyrevit:
+                        id_lower = item_id.lower()
+                        if hasattr(self, "_all_commands") and self._all_commands:
+                            for p_cmd in self._all_commands:
+                                p_uid = p_cmd.get("unique_id", "")
+                                if p_uid.lower() in id_lower or p_uid.replace("_", "").lower() in id_lower.replace("%", "").replace("_", ""):
+                                    pyrevit_unique_id = p_uid
+                                    break
+                        if not pyrevit_unique_id:
+                            pyrevit_unique_id = item_id
+                    
+                    # Helper to save Ribbon item icon on-the-fly
+                    def save_item_icon(r_item):
+                        if not r_item or not getattr(r_item, "Id", None):
+                            return ""
+                        r_id = r_item.Id
+                        safe_fn = "".join([c for c in r_id if c.isalnum() or c in ("_", "-")]).strip()
+                        if not safe_fn:
+                            return ""
+                            
+                        import os
+                        icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
+                        if not os.path.exists(icons_dir):
+                            try:
+                                os.makedirs(icons_dir)
+                            except:
+                                pass
+                        file_path = os.path.join(icons_dir, safe_fn + ".png")
+                        
+                        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+                            img = None
+                            if hasattr(r_item, "LargeImage") and r_item.LargeImage:
+                                img = r_item.LargeImage
+                            elif hasattr(r_item, "Image") and r_item.Image:
+                                img = r_item.Image
+                                
+                            if img:
+                                try:
+                                    from System.Windows.Media.Imaging import PngBitmapEncoder, BitmapFrame
+                                    encoder = PngBitmapEncoder()
+                                    encoder.Frames.Add(BitmapFrame.Create(img))
+                                    with System.IO.FileStream(file_path, System.IO.FileMode.Create, System.IO.FileAccess.Write, getattr(System.IO.FileShare, "None")) as fs:
+                                        encoder.Save(fs)
+                                    log_debug(u"Extracted icon on drag for: {}".format(r_id))
+                                except Exception as e_save:
+                                    log_debug(u"Failed to extract icon on drag: {}".format(str(e_save)))
+                        return file_path if os.path.exists(file_path) else ""
+
+                    is_pulldown = False
+                    ctx_type_name = item.GetType().Name
+                    if "RibbonListButton" in ctx_type_name or "RibbonSplitButton" in ctx_type_name or "RibbonGallery" in ctx_type_name:
+                        is_pulldown = True
+                        
+                    children_list = []
+                    if is_pulldown:
+                        try:
+                            if hasattr(item, "Items") and item.Items:
+                                for child in item.Items:
+                                    child_id = getattr(child, "Id", None)
+                                    if child_id:
+                                        child_text = getattr(child, "Text", "") or getattr(child, "Name", "") or "Command"
+                                        child_name = child_text.replace("\n", " ").replace("\r", " ").strip()
+                                        
+                                        # Save and resolve icon
+                                        child_icon = save_item_icon(child)
+                                        
+                                        children_list.append({
+                                            "name": child_name,
+                                            "unique_id": child_id,
+                                            "icon_path": child_icon
+                                        })
+                        except Exception as child_ex:
+                            log_debug("Failed to extract children of pulldown: " + str(child_ex))
+                        
+                    cmd_type = "pyrevit" if is_pyrevit else "built_in"
+                    cmd_value = pyrevit_unique_id if is_pyrevit else item_id
+                    
+                    # Save main item icon on-the-fly
+                    icon_path = save_item_icon(item)
+                            
+                    import json
+                    cmd_dict = {
+                        "name": item_name,
+                        "unique_id": cmd_value,
+                        "extension": "pyRevit" if is_pyrevit else "Revit Built-in",
+                        "icon_path": icon_path,
+                        "is_pulldown": is_pulldown,
+                        "children": children_list
+                    }
+                    cmd_json = json.dumps(cmd_dict)
+                    
+                    log_debug(u"Initiating async drag from Revit UI for: {} (type={}, val={}, is_pulldown={})".format(
+                        item_name, cmd_type, cmd_value, is_pulldown
+                    ))
+                    
+                    # Schedule DoDragDrop to run asynchronously on the Dispatcher
+                    from System import Action
+                    def run_drag_drop():
+                        try:
+                            import System.Windows
+                            drag_data = System.Windows.DataObject("PyRevitCommandJSON", cmd_json)
+                            System.Windows.DragDrop.DoDragDrop(self, drag_data, System.Windows.DragDropEffects.Copy)
+                        except Exception as drag_ex:
+                            log_debug("Async DoDragDrop failed: " + str(drag_ex))
+                            
+                    self.Dispatcher.BeginInvoke(Action(run_drag_drop))
+                    
+        except Exception as ex:
+            log_debug("Error in on_input_manager_pre_notify: " + str(ex))
 
     def on_reset_clicked(self, sender, args):
         try:
@@ -3996,9 +5744,47 @@ class RadialMenuWindow(Window):
             log_debug(u"Window deactivated but mouse is over window. Ignoring close.")
             return
         self._is_closing = True
-        self._restore_revit_focus = False # Do not force focus when clicked outside
+        
+        # Smart focus check to determine if focus should return to Revit
+        try:
+            import os
+            revit_pid = os.getpid()
+            active_hwnd = user32.GetForegroundWindow()
+            
+            active_pid = ctypes.c_uint32(0)
+            user32.GetWindowThreadProcessId(active_hwnd, ctypes.byref(active_pid))
+            active_pid_val = active_pid.value
+            
+            # If active_hwnd is 0/None, or is the desktop/shell window, we should restore focus to Revit.
+            # If they clicked another application's window, we do not steal focus.
+            if active_hwnd and active_hwnd != 0 and active_pid_val != revit_pid:
+                is_desktop = False
+                try:
+                    desktop_hwnd = user32.GetDesktopWindow()
+                    shell_hwnd = user32.GetShellWindow()
+                    if active_hwnd == desktop_hwnd or active_hwnd == shell_hwnd:
+                        is_desktop = True
+                except:
+                    pass
+                    
+                if not is_desktop:
+                    self._restore_revit_focus = False
+                    log_debug(u"Deactivated: user switched to another process (PID={}, HWND={}). Focus restore disabled.".format(active_pid_val, active_hwnd))
+                else:
+                    self._restore_revit_focus = True
+                    log_debug(u"Deactivated: user clicked desktop/shell. Focus restore enabled.")
+            else:
+                self._restore_revit_focus = True
+                log_debug(u"Deactivated: user clicked Revit window or no window active. Focus restore enabled.")
+        except Exception as ex:
+            log_debug(u"Error in smart focus check on deactivation: {}".format(safe_str(ex)))
+            self._restore_revit_focus = True
+            
         log_debug(u"RadialMenuWindow deactivated (clicked outside). Closing.")
         
+        if self._restore_revit_focus:
+            self.restore_revit_focus()
+            
         try:
             self.Deactivated -= self.on_deactivated
             self.KeyDown -= self.on_key_down
@@ -4035,6 +5821,71 @@ class RadialMenuWindow(Window):
             pass
         self.Close()
            
+def find_category_by_localized_name(doc, name):
+    if not doc or not name:
+        return None
+    try:
+        name_lower = name.lower()
+        for cat in doc.Settings.Categories:
+            if cat.Name and cat.Name.lower() == name_lower:
+                return cat
+    except:
+        pass
+    return None
+
+def get_english_names_for_category(category):
+    names = []
+    if not category:
+        return names
+    try:
+        from Autodesk.Revit.DB import BuiltInCategory
+        import System
+        bic_val = category.Id.IntegerValue
+        try:
+            bic = System.Enum.ToObject(BuiltInCategory, bic_val)
+            bic_str = bic.ToString()
+            names.append(bic_str)
+            if bic_str.startswith("OST_"):
+                names.append(bic_str[4:])
+        except:
+            pass
+            
+        mapping = {
+            -2000011: ["Walls", "Wall"],
+            -2000032: ["Floors", "Floor"],
+            -2000035: ["Roofs", "Roof"],
+            -2000038: ["Ceilings", "Ceiling"],
+            -2000023: ["Doors", "Door"],
+            -2000014: ["Windows", "Window"],
+            -2008065: ["Pipes", "Pipe"],
+            -2008130: ["Ducts", "Duct"],
+            -2009000: ["Conduits", "Conduit"],
+            -2009020: ["Cable Trays", "Cable Tray"],
+            -2000021: ["Dimensions", "Dimension"],
+            -2000220: ["Text Notes", "TextNote"],
+            -2000010: ["Grids", "Grid"],
+            -2000005: ["Levels", "Level"],
+            -2000279: ["Views", "View"],
+            -2000500: ["Sheets", "Sheet"],
+            -2001140: ["Mechanical Equipment"],
+            -2001040: ["Electrical Equipment"],
+            -2001120: ["Lighting Fixtures"],
+            -2001160: ["Plumbing Fixtures"],
+            -2001320: ["Structural Framing"],
+            -2001330: ["Structural Columns"],
+            -2000080: ["Stairs"],
+            -2000095: ["Railings"],
+            -2000050: ["Areas", "Area"],
+            -2000160: ["Rooms", "Room"],
+            -2008049: ["Zones", "Zone"],
+            -2008100: ["Sprinklers", "Sprinkler"],
+        }
+        if bic_val in mapping:
+            names.extend(mapping[bic_val])
+    except:
+        pass
+    return list(set(names))
+
 def get_current_context():
     context = "default"
     try:
@@ -4043,40 +5894,49 @@ def get_current_context():
             uidoc = uiapp.ActiveUIDocument
             if uidoc:
                 doc = uidoc.Document
-                sel_ids = uidoc.Selection.GetElementIds()
-                if sel_ids and sel_ids.Count > 0:
+                
+                # Check selection before click
+                global _selection_before_click
+                sel_ids = _selection_before_click
+                
+                # Fallback to current selection if _selection_before_click was never captured
+                if sel_ids is None:
+                    sel_ids = list(uidoc.Selection.GetElementIds())
+                
+                if sel_ids and len(sel_ids) > 0:
                     first_el = doc.GetElement(sel_ids[0])
-                    category = first_el.Category
-                    if category:
-                        cat_id = category.Id.IntegerValue
-                        # Map integer category IDs
-                        # OST_PipeCurves = -2008065 (Pipes)
-                        # OST_DuctCurves = -2008130 (Ducts)
-                        # OST_Walls = -2000011 (Walls)
-                        # OST_Dimensions = -2000021 (Dimensions)
-                        if cat_id == -2008065:
-                            context = "pipes"
-                        elif cat_id == -2008130:
-                            context = "ducts"
-                        elif cat_id == -2000011:
-                            context = "walls"
-                        elif cat_id == -2000021:
-                            context = "dimensions"
-                        else:
-                            # Fallback enum check if integer doesn't match
-                            try:
-                                from Autodesk.Revit.DB import BuiltInCategory
-                                cat_enum = category.BuiltInCategory
-                                if cat_enum == BuiltInCategory.OST_PipeCurves:
-                                    context = "pipes"
-                                elif cat_enum == BuiltInCategory.OST_DuctCurves:
-                                    context = "ducts"
-                                elif cat_enum == BuiltInCategory.OST_Walls:
-                                    context = "walls"
-                                elif cat_enum == BuiltInCategory.OST_Dimensions:
-                                    context = "dimensions"
-                            except:
-                                pass
+                    if first_el:
+                        category = first_el.Category
+                        if category:
+                            cat_id = category.Id.IntegerValue
+                            # Map integer category IDs
+                            # OST_PipeCurves = -2008065 (Pipes)
+                            # OST_DuctCurves = -2008130 (Ducts)
+                            # OST_Walls = -2000011 (Walls)
+                            # OST_Dimensions = -2000021 (Dimensions)
+                            if cat_id == -2008065:
+                                context = "pipes"
+                            elif cat_id == -2008130:
+                                context = "ducts"
+                            elif cat_id == -2000011:
+                                context = "walls"
+                            elif cat_id == -2000021:
+                                context = "dimensions"
+                            else:
+                                # Fallback enum check if integer doesn't match
+                                try:
+                                    from Autodesk.Revit.DB import BuiltInCategory
+                                    cat_enum = category.BuiltInCategory
+                                    if cat_enum == BuiltInCategory.OST_PipeCurves:
+                                        context = "pipes"
+                                    elif cat_enum == BuiltInCategory.OST_DuctCurves:
+                                        context = "ducts"
+                                    elif cat_enum == BuiltInCategory.OST_Walls:
+                                        context = "walls"
+                                    elif cat_enum == BuiltInCategory.OST_Dimensions:
+                                        context = "dimensions"
+                                except:
+                                    pass
         log_debug(u"Resolved Revit selection context: {}".format(context))
     except Exception as ex:
         log_debug(u"Error detecting selection context: {}".format(safe_str(ex)))
@@ -4182,40 +6042,80 @@ def trigger_radial_menu(x, y):
 # Hook callback function logic
 def hook_callback(nCode, wParam, lParam):
     global _rbutton_down_x, _rbutton_down_y, _is_holding, _menu_opened_by_hold, _hook_id, _hold_id_counter, _active_window
+    global _trigger_mode, _last_rbutton_down_time, _last_rbutton_down_x, _last_rbutton_down_y, _menu_opened_by_double_click
+    global _selection_before_click
     try:
         # If the active window is in customizer mode, we should ignore all hook events to prevent deadlocks and unexpected triggers
         if _active_window and getattr(_active_window, "customizer_mode", False):
             return user32.CallNextHookEx(_hook_id, nCode, wParam, lParam)
             
         if nCode >= 0:
-            if wParam in [0x0204, 0x0205]: # WM_RBUTTONDOWN, WM_RBUTTONUP
+            if wParam in [0x0204, 0x0205, 0x0206]: # WM_RBUTTONDOWN, WM_RBUTTONUP, WM_RBUTTONDBLCLK
                 log_debug(u"HookEvent: wParam={} (0x{:04X})".format(wParam, wParam))
             
             if wParam == 0x0204:  # WM_RBUTTONDOWN
-                # Check if Shift modifier is pressed via Win32 (allows entering customization directly from mouse long-press)
-                # VK_SHIFT = 0x10. If high-order bit is 1, key is down.
-                is_shift_pressed = (user32.GetKeyState(0x10) & 0x8000) != 0
-                if is_shift_pressed:
-                    # In customization mode, we don't trigger normal hold, we can let user Shift+RMB click to configure
-                    # but Shift-click on the Ribbon button is the primary approved method.
-                    pass
-                
+                if not lParam:
+                    return user32.CallNextHookEx(_hook_id, nCode, wParam, lParam)
                 hook_struct = ctypes.cast(ctypes.c_void_p(lParam), ctypes.POINTER(MOUSEHOOKSTRUCT)).contents
-                _rbutton_down_x = hook_struct.pt.x
-                _rbutton_down_y = hook_struct.pt.y
+                current_x = hook_struct.pt.x
+                current_y = hook_struct.pt.y
                 
-                with _hold_lock:
-                    _is_holding = True
-                    _menu_opened_by_hold = False
-                    _hold_id_counter += 1
-                    current_hold_id = _hold_id_counter
+                # Check for double click manually (in case WM_RBUTTONDBLCLK is not dispatched)
+                current_time = time.time()
+                time_diff = current_time - _last_rbutton_down_time
+                dx = abs(current_x - _last_rbutton_down_x)
+                dy = abs(current_y - _last_rbutton_down_y)
                 
-                log_debug(u"RBUTTONDOWN at pt=({}, {}), starting thread hold_id={}.".format(_rbutton_down_x, _rbutton_down_y, current_hold_id))
+                is_double_click = False
+                if time_diff < 0.5 and dx < 10 and dy < 10:
+                    is_double_click = True
                 
-                # Start hold detection in a background thread to prevent UI thread dispatcher blockages
-                t = threading.Thread(target=hold_detection_worker, args=(current_hold_id, _rbutton_down_x, _rbutton_down_y))
-                t.daemon = True
-                t.start()
+                _last_rbutton_down_time = current_time
+                _last_rbutton_down_x = current_x
+                _last_rbutton_down_y = current_y
+                
+                if _trigger_mode == "double_click":
+                    if is_double_click:
+                        log_debug(u"Double-click detected (manual). Opening radial menu.")
+                        with _hold_lock:
+                            _is_holding = False
+                            _menu_opened_by_double_click = True
+                        trigger_radial_menu(current_x, current_y)
+                        return 1  # Swallow the second button down
+                else:
+                    # Check if Shift modifier is pressed via Win32 (allows entering customization directly from mouse long-press)
+                    # VK_SHIFT = 0x10. If high-order bit is 1, key is down.
+                    is_shift_pressed = (user32.GetKeyState(0x10) & 0x8000) != 0
+                    if is_shift_pressed:
+                        pass
+                    
+                    _rbutton_down_x = current_x
+                    _rbutton_down_y = current_y
+                    
+                    with _hold_lock:
+                        _is_holding = True
+                        _menu_opened_by_hold = False
+                        _hold_id_counter += 1
+                        current_hold_id = _hold_id_counter
+                    
+                    log_debug(u"RBUTTONDOWN at pt=({}, {}), starting thread hold_id={}.".format(_rbutton_down_x, _rbutton_down_y, current_hold_id))
+                    
+                    # Start hold detection in a background thread to prevent UI thread dispatcher blockages
+                    t = threading.Thread(target=hold_detection_worker, args=(current_hold_id, _rbutton_down_x, _rbutton_down_y))
+                    t.daemon = True
+                    t.start()
+                    
+            elif wParam == 0x0206:  # WM_RBUTTONDBLCLK
+                if _trigger_mode == "double_click":
+                    if not lParam:
+                        return user32.CallNextHookEx(_hook_id, nCode, wParam, lParam)
+                    log_debug(u"WM_RBUTTONDBLCLK hook event. Opening radial menu.")
+                    hook_struct = ctypes.cast(ctypes.c_void_p(lParam), ctypes.POINTER(MOUSEHOOKSTRUCT)).contents
+                    with _hold_lock:
+                        _is_holding = False
+                        _menu_opened_by_double_click = True
+                    trigger_radial_menu(hook_struct.pt.x, hook_struct.pt.y)
+                    return 1  # Swallow
                     
             elif wParam == 0x0205:  # WM_RBUTTONUP
                 log_debug(u"RBUTTONUP. _is_holding={}, _menu_opened_by_hold={}".format(_is_holding, _menu_opened_by_hold))
@@ -4224,6 +6124,9 @@ def hook_callback(nCode, wParam, lParam):
                     _is_holding = False
                     if _menu_opened_by_hold:
                         _menu_opened_by_hold = False
+                        swallow = True
+                    if _menu_opened_by_double_click:
+                        _menu_opened_by_double_click = False
                         swallow = True
                 
                 if swallow:
@@ -4236,7 +6139,7 @@ def hook_callback(nCode, wParam, lParam):
                 with _hold_lock:
                     is_holding_now = _is_holding
                 
-                if is_holding_now:
+                if is_holding_now and lParam:
                     hook_struct = ctypes.cast(ctypes.c_void_p(lParam), ctypes.POINTER(MOUSEHOOKSTRUCT)).contents
                     dx = abs(hook_struct.pt.x - _rbutton_down_x)
                     dy = abs(hook_struct.pt.y - _rbutton_down_y)
@@ -4280,12 +6183,13 @@ class RadialMenuManager(object):
         self.ui_dispatcher = None
 
     def start(self):
-        global _hook_id, _hook_proc, _ui_dispatcher, _hold_delay_ms
+        global _hook_id, _hook_proc, _ui_dispatcher, _hold_delay_ms, _trigger_mode
         log_debug(u"RadialMenuManager.start() called.")
         
         try:
             config = load_config()
             _hold_delay_ms = config.get("settings", {}).get("hold_delay_ms", 400)
+            _trigger_mode = config.get("settings", {}).get("trigger_mode", "hold")
             log_debug(u"Loaded hold delay: {}ms".format(_hold_delay_ms))
         except Exception as e_cfg:
             log_debug(u"Failed to load delay on start: {}".format(safe_str(e_cfg)))

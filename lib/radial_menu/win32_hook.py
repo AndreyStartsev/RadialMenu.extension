@@ -33,6 +33,36 @@ HOOKPROC = ctypes.WINFUNCTYPE(
     ctypes.c_int64, ctypes.c_int, ctypes.c_uint64, ctypes.c_uint64
 )
 
+# Configure ctypes signatures for 64-bit safety
+user32.SetWindowsHookExW.argtypes = [
+    ctypes.c_int,
+    HOOKPROC,
+    ctypes.c_void_p,
+    ctypes.c_uint32
+]
+user32.SetWindowsHookExW.restype = ctypes.c_void_p
+
+user32.UnhookWindowsHookEx.argtypes = [
+    ctypes.c_void_p
+]
+user32.UnhookWindowsHookEx.restype = ctypes.c_bool
+
+user32.CallNextHookEx.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_int,
+    ctypes.c_uint64,
+    ctypes.c_uint64
+]
+user32.CallNextHookEx.restype = ctypes.c_int64
+
+user32.GetKeyState.argtypes = [
+    ctypes.c_int
+]
+user32.GetKeyState.restype = ctypes.c_int16
+
+kernel32.GetCurrentThreadId.argtypes = []
+kernel32.GetCurrentThreadId.restype = ctypes.c_uint32
+
 logger = logging.getLogger(__name__)
 
 
@@ -63,6 +93,7 @@ class MOUSEHOOKSTRUCT(ctypes.Structure):
 # ---------------------------------------------------------------------------
 WM_RBUTTONDOWN = 0x0204
 WM_RBUTTONUP = 0x0205
+WM_RBUTTONDBLCLK = 0x0206
 WM_MOUSEMOVE = 0x0200
 WH_MOUSE = 7
 VK_SHIFT = 0x10
@@ -283,10 +314,16 @@ class HookManager(object):
     """
 
     def __init__(self, on_hold_callback=None, hold_delay_ms=400,
-                 move_threshold=10):
+                 move_threshold=10, trigger_mode="hold", on_double_click_callback=None):
         self._on_hold_callback = on_hold_callback
+        self._on_double_click_callback = on_double_click_callback
+        self.trigger_mode = trigger_mode
         self._hook_id = None
         self._hook_proc = None  # prevent GC of the callback
+        self._last_rbutton_down_time = 0.0
+        self._last_rbutton_down_x = 0
+        self._last_rbutton_down_y = 0
+        self._menu_opened_by_double_click = False
 
         self.hold_detector = HoldDetector(
             delay_ms=hold_delay_ms,
@@ -355,17 +392,61 @@ class HookManager(object):
         try:
             if nCode >= 0:
                 if wParam == WM_RBUTTONDOWN:
-                    # Ignore Shift+RMB (reserved for custom actions)
-                    is_shift = (user32.GetKeyState(VK_SHIFT) & 0x8000) != 0
-                    if not is_shift:
+                    hs = ctypes.cast(
+                        ctypes.c_void_p(lParam),
+                        ctypes.POINTER(MOUSEHOOKSTRUCT),
+                    ).contents
+                    current_x = hs.pt.x
+                    current_y = hs.pt.y
+                    
+                    current_time = time.time()
+                    time_diff = current_time - self._last_rbutton_down_time
+                    dx = abs(current_x - self._last_rbutton_down_x)
+                    dy = abs(current_y - self._last_rbutton_down_y)
+                    
+                    is_double_click = False
+                    if time_diff < 0.5 and dx < 10 and dy < 10:
+                        is_double_click = True
+                        
+                    self._last_rbutton_down_time = current_time
+                    self._last_rbutton_down_x = current_x
+                    self._last_rbutton_down_y = current_y
+                    
+                    if self.trigger_mode == "double_click":
+                        if is_double_click:
+                            logger.debug("Double-click detected (manual). Triggering double-click callback.")
+                            self.hold_detector.cancel()
+                            self._menu_opened_by_double_click = True
+                            if self._on_double_click_callback:
+                                self._on_double_click_callback(current_x, current_y)
+                            return 1
+                    else:
+                        # Ignore Shift+RMB (reserved for custom actions)
+                        is_shift = (user32.GetKeyState(VK_SHIFT) & 0x8000) != 0
+                        if not is_shift:
+                            self.hold_detector.button_down(current_x, current_y)
+
+                elif wParam == WM_RBUTTONDBLCLK:
+                    if self.trigger_mode == "double_click":
+                        logger.debug("WM_RBUTTONDBLCLK hook event. Triggering double-click callback.")
                         hs = ctypes.cast(
                             ctypes.c_void_p(lParam),
                             ctypes.POINTER(MOUSEHOOKSTRUCT),
                         ).contents
-                        self.hold_detector.button_down(hs.pt.x, hs.pt.y)
+                        self.hold_detector.cancel()
+                        self._menu_opened_by_double_click = True
+                        if self._on_double_click_callback:
+                            self._on_double_click_callback(hs.pt.x, hs.pt.y)
+                        return 1
 
                 elif wParam == WM_RBUTTONUP:
+                    swallow = False
                     if self.hold_detector.button_up():
+                        swallow = True
+                    if self._menu_opened_by_double_click:
+                        self._menu_opened_by_double_click = False
+                        swallow = True
+                    if swallow:
                         # Swallow the event to suppress the context menu
                         return 1
 

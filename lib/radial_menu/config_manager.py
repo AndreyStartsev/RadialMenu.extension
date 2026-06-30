@@ -198,8 +198,8 @@ class ConfigManager(object):
             parent_dir = os.path.dirname(self.config_path)
             if parent_dir and not os.path.exists(parent_dir):
                 os.makedirs(parent_dir)
+            content = json.dumps(config_data, indent=4)
             with open(self.config_path, "wb") as f:
-                content = json.dumps(config_data, indent=4)
                 f.write(content.encode("utf-8"))
             logger.debug(u"Configuration saved successfully.")
         except Exception as ex:

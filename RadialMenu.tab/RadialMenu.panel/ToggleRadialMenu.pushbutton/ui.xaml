@@ -75,6 +75,7 @@
                         
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Panel.ZIndex" Value="99"/>
                                 <Setter Property="Foreground" Value="{DynamicResource HoverTextColor}"/>
                                 <Trigger.EnterActions>
                                     <BeginStoryboard>
@@ -719,42 +720,38 @@
             </Button>
 
             <!-- ================= CORE BUTTONS (SETTINGS MODE) ================= -->
-            <Button Name="BtnCoreMove" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C" Visibility="Collapsed">
+            <Button Name="BtnCoreMove" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C" Visibility="Collapsed" ToolTip="Move Menu">
                 <Canvas Width="640" Height="640">
                     <StackPanel Name="BtnCoreMovePanel" Width="50" Height="40" VerticalAlignment="Center">
-                        <TextBlock Text="✥" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Move" Foreground="White" FontSize="8.5" HorizontalAlignment="Center"/>
+                        <TextBlock Text="✥" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Canvas>
             </Button>
-            <Button Name="BtnCorePool" Style="{StaticResource CoreButtonStyle}" Background="#FF4CAF50" Visibility="Collapsed">
+            <Button Name="BtnCorePool" Style="{StaticResource CoreButtonStyle}" Background="#FF4CAF50" Visibility="Collapsed" ToolTip="Command Pool">
                 <Canvas Width="640" Height="640">
                     <StackPanel Name="BtnCorePoolPanel" Width="50" Height="40" VerticalAlignment="Center">
-                        <TextBlock Text="📋" Foreground="White" FontSize="11" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Pool" Foreground="White" FontSize="8.5" HorizontalAlignment="Center"/>
+                        <TextBlock Text="📋" Foreground="White" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Canvas>
             </Button>
-            <Button Name="BtnCoreAppearance" Style="{StaticResource CoreButtonStyle}" Background="#FFFFC107" Visibility="Collapsed">
+            <Button Name="BtnCoreAppearance" Style="{StaticResource CoreButtonStyle}" Background="#FFFFC107" Visibility="Collapsed" ToolTip="Appearance &amp; Settings">
                 <Canvas Width="640" Height="640">
                     <StackPanel Name="BtnCoreAppearancePanel" Width="50" Height="40" VerticalAlignment="Center">
-                        <TextBlock Text="🎨" Foreground="Black" FontSize="11" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Look" Foreground="Black" FontSize="8.5" HorizontalAlignment="Center"/>
+                        <TextBlock Text="🎨" Foreground="Black" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Canvas>
             </Button>
-            <Button Name="BtnCoreExit" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935" Visibility="Collapsed">
+            <Button Name="BtnCoreExit" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935" Visibility="Collapsed" ToolTip="Exit Settings">
                 <Canvas Width="640" Height="640">
                     <StackPanel Name="BtnCoreExitPanel" Width="50" Height="40" VerticalAlignment="Center">
-                        <TextBlock Text="✕" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Exit" Foreground="White" FontSize="8.5" HorizontalAlignment="Center"/>
+                        <TextBlock Text="✕" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Canvas>
             </Button>
 
         </Canvas>
         
-        <Border Name="CustomizerBorder" Grid.Column="1" HorizontalAlignment="Stretch" Height="620" 
+        <Border Name="CustomizerBorder" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" 
                 Margin="10" Padding="15" CornerRadius="15" Background="{DynamicResource CustomizerBg}" BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="1.2" Visibility="Collapsed"
                 UseLayoutRounding="True"
                 TextOptions.TextFormattingMode="Display"
@@ -816,55 +813,165 @@
                                     </TextBlock>
                                 </Grid>
                                 
-                                <!-- Pool ListBox -->
-                                <ListBox Grid.Row="1" Name="PoolListBox" Background="Transparent" BorderThickness="0"
-                                         ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,0,4"
-                                         SelectionMode="Single">
-                                    <ListBox.ItemContainerStyle>
-                                        <Style TargetType="ListBoxItem">
+                                <!-- Pool TreeView -->
+                                <TreeView Grid.Row="1" Name="PoolTreeView" Background="Transparent" BorderThickness="0"
+                                          ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,0,4"
+                                          HorizontalContentAlignment="Stretch" AllowDrop="True">
+                                    <TreeView.ItemContainerStyle>
+                                        <Style TargetType="TreeViewItem">
+                                            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                            <Setter Property="IsExpanded" Value="True"/>
                                             <Setter Property="Background" Value="Transparent"/>
                                             <Setter Property="Padding" Value="0"/>
                                             <Setter Property="Margin" Value="0,1,0,1"/>
                                             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                             <Setter Property="Template">
                                                 <Setter.Value>
-                                                    <ControlTemplate TargetType="ListBoxItem">
-                                                        <Border x:Name="ItemBd" CornerRadius="4" Background="{TemplateBinding Background}" Padding="6,4">
-                                                            <ContentPresenter/>
-                                                        </Border>
+                                                    <ControlTemplate TargetType="TreeViewItem">
+                                                        <Grid>
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition Height="Auto"/>
+                                                                <RowDefinition Height="Auto" Name="ItemsHostRow"/>
+                                                            </Grid.RowDefinitions>
+                                                            
+                                                            <!-- Header border containing the item row -->
+                                                            <Border x:Name="ItemBd" CornerRadius="4" Background="{TemplateBinding Background}" Padding="6,4"
+                                                                    BorderThickness="{TemplateBinding BorderThickness}" BorderBrush="{TemplateBinding BorderBrush}">
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="Auto"/> <!-- Expander Toggle -->
+                                                                        <ColumnDefinition Width="*"/>    <!-- Content -->
+                                                                    </Grid.ColumnDefinitions>
+                                                                    
+                                                                    <!-- Expander Toggle Button -->
+                                                                    <ToggleButton x:Name="Expander" ClickMode="Press" Margin="0,0,4,0"
+                                                                                  IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                                                        <ToggleButton.Style>
+                                                                            <Style TargetType="ToggleButton">
+                                                                                <Setter Property="UIElement.Focusable" Value="False"/>
+                                                                                <Setter Property="FrameworkElement.Width" Value="14"/>
+                                                                                <Setter Property="FrameworkElement.Height" Value="14"/>
+                                                                                <Setter Property="Control.Template">
+                                                                                    <Setter.Value>
+                                                                                        <ControlTemplate TargetType="ToggleButton">
+                                                                                            <Border Width="14" Height="14" Background="Transparent">
+                                                                                                <Path x:Name="ExpandPath" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                                      Fill="{DynamicResource CustomizerSecText}"
+                                                                                                      Data="M 4 2 L 8 6 L 4 10 Z"/>
+                                                                                            </Border>
+                                                                                            <ControlTemplate.Triggers>
+                                                                                                <Trigger Property="ToggleButton.IsChecked" Value="True">
+                                                                                                    <Setter TargetName="ExpandPath" Property="Path.Data" Value="M 2 4 L 10 4 L 6 8 Z"/>
+                                                                                                </Trigger>
+                                                                                            </ControlTemplate.Triggers>
+                                                                                        </ControlTemplate>
+                                                                                    </Setter.Value>
+                                                                                </Setter>
+                                                                            </Style>
+                                                                        </ToggleButton.Style>
+                                                                    </ToggleButton>
+                                                                    
+                                                                    <ContentPresenter Grid.Column="1" ContentSource="Header" HorizontalAlignment="Stretch"/>
+                                                                </Grid>
+                                                            </Border>
+                                                            
+                                                            <ItemsPresenter Grid.Row="1" Name="ItemsHost" Margin="12,0,0,0"/>
+                                                        </Grid>
                                                         <ControlTemplate.Triggers>
-                                                            <Trigger Property="IsMouseOver" Value="True">
-                                                                <Setter TargetName="ItemBd" Property="Background" Value="#15FFFFFF"/>
+                                                            <Trigger Property="TreeViewItem.IsExpanded" Value="False">
+                                                                <Setter TargetName="ItemsHost" Property="UIElement.Visibility" Value="Collapsed"/>
                                                             </Trigger>
-                                                            <Trigger Property="IsSelected" Value="True">
-                                                                <Setter TargetName="ItemBd" Property="Background" Value="#2500E5FF"/>
+                                                            <Trigger Property="TreeViewItem.HasItems" Value="False">
+                                                                <Setter TargetName="Expander" Property="UIElement.Visibility" Value="Hidden"/>
+                                                            </Trigger>
+                                                            <Trigger Property="UIElement.IsMouseOver" Value="True" SourceName="ItemBd">
+                                                                <Setter TargetName="ItemBd" Property="Panel.Background" Value="#15FFFFFF"/>
+                                                            </Trigger>
+                                                            <Trigger Property="TreeViewItem.IsSelected" Value="True">
+                                                                <Setter TargetName="ItemBd" Property="Panel.Background" Value="#2500E5FF"/>
                                                             </Trigger>
                                                         </ControlTemplate.Triggers>
                                                     </ControlTemplate>
                                                 </Setter.Value>
                                             </Setter>
                                         </Style>
-                                    </ListBox.ItemContainerStyle>
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid>
+                                    </TreeView.ItemContainerStyle>
+                                    <TreeView.ItemTemplate>
+                                        <HierarchicalDataTemplate ItemsSource="{Binding children}">
+                                            <Grid HorizontalAlignment="Stretch">
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="22"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/> <!-- Checkbox -->
+                                                    <ColumnDefinition Width="22"/>   <!-- Icon -->
+                                                    <ColumnDefinition Width="*"/>    <!-- Name -->
+                                                    <ColumnDefinition Width="Auto"/> <!-- Level -->
+                                                    <ColumnDefinition Width="Auto"/> <!-- Priority -->
+                                                    <ColumnDefinition Width="Auto"/> <!-- Eye (Visibility) -->
+                                                    <ColumnDefinition Width="Auto"/> <!-- Delete -->
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{Binding Icon}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                <StackPanel Grid.Column="1" Margin="4,0,0,0" VerticalAlignment="Center">
+                                                
+                                                <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked, Mode=TwoWay}" Checked="on_pool_item_checked_changed" Unchecked="on_pool_item_checked_changed" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                
+                                                <Grid Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <Image Source="{Binding Icon}" Width="16" Height="16" Stretch="Uniform" Name="ItemIconImage" Visibility="Collapsed"/>
+                                                    <TextBlock Text="{Binding Icon}" FontSize="12" Name="ItemIconText" Visibility="Visible" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Grid>
+                                                <StackPanel Grid.Column="2" Margin="4,0,0,0" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding DisplayName}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource CustomizerText}" TextTrimming="CharacterEllipsis"/>
                                                     <TextBlock Text="{Binding ContextSummary}" FontSize="9" Foreground="{DynamicResource CustomizerSecText}" TextTrimming="CharacterEllipsis"/>
                                                 </StackPanel>
-                                                <TextBlock Grid.Column="2" Text="{Binding LevelLabel}" FontSize="9" Foreground="{DynamicResource CustomizerSecText}" VerticalAlignment="Center" Margin="4,0,4,0"/>
-                                                <TextBlock Grid.Column="3" Text="{Binding PriorityLabel}" FontSize="9" Foreground="{DynamicResource CustomizerHighlight}" VerticalAlignment="Center" FontWeight="Bold" MinWidth="20" TextAlignment="Right"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding LevelLabel}" FontSize="9" Foreground="{DynamicResource CustomizerSecText}" VerticalAlignment="Center" Margin="4,0,4,0"/>
+                                                <TextBlock Grid.Column="4" Text="{Binding PriorityLabel}" FontSize="9" Foreground="{DynamicResource CustomizerHighlight}" VerticalAlignment="Center" FontWeight="Bold" MinWidth="20" TextAlignment="Right"/>
+                                                
+                                                <Button Grid.Column="5" Name="BtnRowEye" Width="20" Height="20" Margin="6,0,0,0"
+                                                         Background="Transparent" BorderThickness="0" Cursor="Hand" VerticalAlignment="Center"
+                                                         ToolTip="{Binding EyeToolTip}">
+                                                     <Button.Template>
+                                                         <ControlTemplate TargetType="Button">
+                                                             <Border Background="{TemplateBinding Background}">
+                                                                 <Path Data="{Binding EyeGeometry}"
+                                                                       Fill="{Binding EyeBrush}" Stretch="Uniform" Width="11" Height="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                             </Border>
+                                                         </ControlTemplate>
+                                                     </Button.Template>
+                                                 </Button>
+                                                
+                                                <Button Grid.Column="6" Name="BtnRowDelete" Width="20" Height="20" Margin="6,0,0,0"
+                                                         Background="Transparent" BorderThickness="0" Cursor="Hand" VerticalAlignment="Center"
+                                                         ToolTip="Delete from pool">
+                                                     <Button.Template>
+                                                         <ControlTemplate TargetType="Button">
+                                                             <Border Background="{TemplateBinding Background}">
+                                                                 <Path Data="M6,19c0,1.1,0.9,2,2,2h8c1.1,0,2,-0.9,2,-2V7H6V19z M19,4h-3.5l-1,-1h-5l-1,1H5v2h14V4z"
+                                                                       Fill="#FFE53935" Stretch="Uniform" Width="11" Height="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                             </Border>
+                                                         </ControlTemplate>
+                                                     </Button.Template>
+                                                 </Button>
                                             </Grid>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
+                                            <HierarchicalDataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsImageIcon}" Value="True">
+                                                    <Setter TargetName="ItemIconImage" Property="Visibility" Value="Visible"/>
+                                                    <Setter TargetName="ItemIconText" Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsImageIcon}" Value="False">
+                                                    <Setter TargetName="ItemIconImage" Property="Visibility" Value="Collapsed"/>
+                                                    <Setter TargetName="ItemIconText" Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </HierarchicalDataTemplate.Triggers>
+                                        </HierarchicalDataTemplate>
+                                    </TreeView.ItemTemplate>
+                                </TreeView>
+                                
+                                <!-- Drag Preview Popup -->
+                                <Popup Name="DragPreviewPopup" AllowsTransparency="True" IsOpen="False" Placement="Relative" PlacementTarget="{Binding ElementName=PoolTreeView}" IsHitTestVisible="False">
+                                    <Border CornerRadius="4" Background="#E0222222" BorderBrush="#FF00E5FF" BorderThickness="1.5" Padding="8,5">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Image Name="DragPreviewIconImage" Width="16" Height="16" Margin="0,0,6,0" Visibility="Collapsed"/>
+                                            <TextBlock Name="DragPreviewIconText" Foreground="White" FontSize="11" Margin="0,0,6,0" Visibility="Collapsed" VerticalAlignment="Center"/>
+                                            <TextBlock Name="DragPreviewText" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Popup>
                                 
                                 <!-- Add Buttons -->
                                 <Grid Grid.Row="2" Margin="0,4,0,4">
@@ -873,8 +980,8 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Button Name="BtnAddFromPyRevit" Grid.Column="0" Content="＋ pyRevit" Height="24" Margin="0,0,3,0"
-                                            Background="#FF4CAF50" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                    <Button Name="BtnAddFromPyRevit" Grid.Column="0" Content="＋ New" Height="24" Margin="0,0,3,0"
+                                            Background="#FF4CAF50" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="9">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
                                                 <Border CornerRadius="4" Background="{TemplateBinding Background}">
@@ -883,8 +990,8 @@
                                             </ControlTemplate>
                                         </Button.Template>
                                     </Button>
-                                    <Button Name="BtnAddBuiltIn" Grid.Column="1" Content="＋ Built-in" Height="24" Margin="3,0,3,0"
-                                            Background="#FF0083B0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                    <Button Name="BtnAddSubmenuPool" Grid.Column="1" Content="＋ Submenu" Height="24" Margin="3,0,3,0"
+                                            Background="#FF9C27B0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="9">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
                                                 <Border CornerRadius="4" Background="{TemplateBinding Background}">
@@ -893,8 +1000,8 @@
                                             </ControlTemplate>
                                         </Button.Template>
                                     </Button>
-                                    <Button Name="BtnAddSubmenuPool" Grid.Column="2" Content="＋ Submenu" Height="24" Margin="3,0,0,0"
-                                            Background="#FF9C27B0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                    <Button Name="BtnAddEmptyPool" Grid.Column="2" Content="＋ Empty" Height="24" Margin="3,0,0,0"
+                                            Background="#FF78909C" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="9">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
                                                 <Border CornerRadius="4" Background="{TemplateBinding Background}">
@@ -912,8 +1019,8 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Button Name="BtnExitCustomizer" Grid.Column="0" Content="Exit Settings" Height="24" Margin="0,0,3,0"
-                                                Background="#FF55555C" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                        <Button Name="BtnDeleteChecked" Grid.Column="0" Content="Delete Checked" Height="24" Margin="0,0,4,0"
+                                                Background="#FFE53935" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
                                             <Button.Template>
                                                 <ControlTemplate TargetType="Button">
                                                     <Border CornerRadius="4" Background="{TemplateBinding Background}">
@@ -922,8 +1029,8 @@
                                                 </ControlTemplate>
                                             </Button.Template>
                                         </Button>
-                                        <Button Name="BtnReset" Grid.Column="1" Content="Reset All" Height="24" Margin="3,0,0,0"
-                                                Background="#FFFF5722" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                        <Button Name="BtnExitCustomizer" Grid.Column="1" Content="Exit Settings" Height="24" Margin="4,0,0,0"
+                                                Background="#FF55555C" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
                                             <Button.Template>
                                                 <ControlTemplate TargetType="Button">
                                                     <Border CornerRadius="4" Background="{TemplateBinding Background}">
@@ -937,99 +1044,133 @@
                             </Grid>
                             
                             <!-- Right Column: Edit Panel (shown when a pool item is selected) -->
-                            <Border Grid.Column="1" Name="PoolEditPanel" Visibility="Visible" IsEnabled="False" Width="285"
-                                    CornerRadius="6" Background="{DynamicResource CustomizerInputBg}" Padding="8" Margin="10,0,0,0" VerticalAlignment="Stretch">
-                                <StackPanel>
-                                    <TextBlock Name="TxtEditItemName" Text="Edit: Command Name" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource CustomizerText}" Margin="0,0,0,6"/>
+                            <Border Grid.Column="1" Name="PoolEditPlaceholder" Visibility="Visible" Width="285"
+                                    CornerRadius="6" Background="{DynamicResource CustomizerPanelBg}" Padding="8" Margin="10,0,0,0" VerticalAlignment="Stretch">
+                                <Grid>
+                                    <TextBlock Text="Select a command from the list&#x0a;to configure its context rules." 
+                                               Foreground="{DynamicResource CustomizerSecText}" FontSize="11" 
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" LineHeight="16"/>
+                                </Grid>
+                            </Border>
+
+                            <Border Grid.Column="1" Name="PoolEditPanel" Visibility="Collapsed" IsEnabled="True" Width="285"
+                                    CornerRadius="6" Background="{DynamicResource CustomizerPanelBg}" Padding="8" Margin="10,0,0,0" VerticalAlignment="Stretch">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/> <!-- Title -->
+                                        <RowDefinition Height="Auto"/> <!-- Static Input Fields -->
+                                        <RowDefinition Height="*"/>    <!-- Scrollable Class List -->
+                                        <RowDefinition Height="Auto"/> <!-- Action Buttons -->
+                                    </Grid.RowDefinitions>
+                                    
+                                    <TextBlock Grid.Row="0" Name="TxtEditItemName" Text="Edit: Command Name" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource CustomizerText}" Margin="0,0,0,6"/>
                                     
                                     <!-- Command details fields -->
-                                    <Grid Margin="0,0,0,6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="65"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Name:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBox Name="EditItemNameTxt" Grid.Column="1" Height="22" FontSize="10" Padding="4,1" VerticalContentAlignment="Center"
-                                                 Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}"/>
-                                    </Grid>
-                                    
-                                    <Grid Margin="0,0,0,6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="65"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Command:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBox Name="EditItemCommandTxt" Grid.Column="1" Height="22" FontSize="10" Padding="4,1" VerticalContentAlignment="Center"
-                                                 Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}"/>
-                                    </Grid>
-                                    
-                                    <Grid Margin="0,0,0,6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="65"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Icon/Emoji:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBox Name="EditItemIconTxt" Grid.Column="1" Height="22" FontSize="10" Padding="4,1" VerticalContentAlignment="Center"
-                                                 Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}"/>
-                                    </Grid>
-                                    
-                                    <!-- Level and Parent selectors -->
-                                    <Grid Margin="0,0,0,6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Level:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                        <ComboBox Name="EditLevelCombo" Grid.Column="1" Height="22" FontSize="10" VerticalContentAlignment="Center"
-                                                  Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}">
-                                            <ComboBoxItem Content="L1 (Inner)"/>
-                                            <ComboBoxItem Content="L2 (Mid)"/>
-                                            <ComboBoxItem Content="L3 (Outer)"/>
-                                        </ComboBox>
-                                        <TextBlock Grid.Column="2" Text="Parent:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10" VerticalAlignment="Center" Margin="8,0,4,0"/>
-                                        <ComboBox Name="EditParentCombo" Grid.Column="3" Height="22" FontSize="10" VerticalContentAlignment="Center"
-                                                  Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}">
-                                            <ComboBoxItem Content="None (Root)"/>
-                                        </ComboBox>
-                                    </Grid>
-                                    
-                                    <!-- View type checkboxes -->
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <CheckBox Name="EditChkView3D" Content="3D" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="0,0,12,0"/>
-                                        <CheckBox Name="EditChkViewPlan" Content="Plans" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="0,0,12,0"/>
-                                        <CheckBox Name="EditChkViewSheet" Content="Sheets" Foreground="{DynamicResource CustomizerText}" FontSize="10"/>
+                                    <StackPanel Grid.Row="1" Margin="0,0,0,4">
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="65"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Name:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10" VerticalAlignment="Center"/>
+                                            <TextBox Name="EditItemNameTxt" Grid.Column="1" Height="22" FontSize="10" Padding="4,1" VerticalContentAlignment="Center"
+                                                     Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}"/>
+                                        </Grid>
+                                        
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="65"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Command:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10" VerticalAlignment="Center"/>
+                                            <TextBox Name="EditItemCommandTxt" Grid.Column="1" Height="22" FontSize="10" Padding="4,1" VerticalContentAlignment="Center"
+                                                     Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}"/>
+                                        </Grid>
+                                        
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="65"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Icon/Emoji:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10" VerticalAlignment="Center"/>
+                                            <TextBox Name="EditItemIconTxt" Grid.Column="1" Height="22" FontSize="10" Padding="4,1" VerticalContentAlignment="Center"
+                                                     Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}"/>
+                                            <Button Name="BtnSelectIcon" Grid.Column="2" Content="🔍" Width="22" Height="22" Margin="3,0,0,0"
+                                                    Background="#FF55555C" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10" ToolTip="Select from parsed icons">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border CornerRadius="3" Background="{TemplateBinding Background}">
+                                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+                                        </Grid>
+                                        
+                                        <!-- View type checkboxes -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                            <CheckBox Name="EditChkView3D" Content="3D" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="0,0,12,0"/>
+                                            <CheckBox Name="EditChkViewPlan" Content="Plans" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="0,0,12,0"/>
+                                            <CheckBox Name="EditChkViewSheet" Content="Sheets" Foreground="{DynamicResource CustomizerText}" FontSize="10"/>
+                                        </StackPanel>
+                                        
+                                        <!-- Selection context checkboxes -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                            <CheckBox Name="EditChkPrehighlighted" Content="Pre-highlighted" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="0,0,12,0"/>
+                                            <CheckBox Name="EditChkSelection" Content="Selection" Foreground="{DynamicResource CustomizerText}" FontSize="10"/>
+                                        </StackPanel>
+                                        
+                                        <!-- Class/Category search -->
+                                        <Grid Margin="0,0,0,4">
+                                            <TextBox Name="EditClassSearch" Height="20" FontSize="10" Padding="4,1"
+                                                     Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" 
+                                                     BorderBrush="{DynamicResource CustomizerSecText}" VerticalContentAlignment="Center"/>
+                                            <TextBlock IsHitTestVisible="False" Text="Search classes/categories..." VerticalAlignment="Center" HorizontalAlignment="Left" Margin="6,0,0,0" Foreground="{DynamicResource CustomizerSecText}" FontSize="10">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Text, ElementName=EditClassSearch}" Value="">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
                                     </StackPanel>
                                     
-                                    <!-- Class/Category search -->
-                                    <Grid Margin="0,0,0,4">
-                                        <TextBox Name="EditClassSearch" Height="20" FontSize="10" Padding="4,1"
-                                                 Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" 
-                                                 BorderBrush="{DynamicResource CustomizerSecText}" VerticalContentAlignment="Center"/>
-                                        <TextBlock IsHitTestVisible="False" Text="Search classes/categories..." VerticalAlignment="Center" HorizontalAlignment="Left" Margin="6,0,0,0" Foreground="{DynamicResource CustomizerSecText}" FontSize="10">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Text, ElementName=EditClassSearch}" Value="">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </Grid>
-                                    
-                                    <ListBox Name="EditClassList" Height="320" Background="Transparent" BorderThickness="0"
-                                             ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,0,6">
+                                    <ListBox Grid.Row="2" Name="EditClassList" Style="{x:Null}" Background="Transparent" BorderThickness="0"
+                                             ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,2,0,6">
+                                        <ListBox.Template>
+                                            <ControlTemplate TargetType="ListBox">
+                                                <ScrollViewer Background="Transparent" Focusable="False">
+                                                    <ItemsPresenter />
+                                                </ScrollViewer>
+                                            </ControlTemplate>
+                                        </ListBox.Template>
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
-                                                <CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="1"/>
+                                                <CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="1" Style="{x:Null}"/>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                         <ListBox.GroupStyle>
                                             <GroupStyle>
+                                                <GroupStyle.ContainerStyle>
+                                                    <Style TargetType="GroupItem">
+                                                        <Setter Property="Template">
+                                                            <Setter.Value>
+                                                                <ControlTemplate TargetType="GroupItem">
+                                                                    <StackPanel>
+                                                                        <ContentPresenter Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}" />
+                                                                        <ItemsPresenter Margin="10,0,0,0" />
+                                                                    </StackPanel>
+                                                                </ControlTemplate>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </Style>
+                                                </GroupStyle.ContainerStyle>
                                                 <GroupStyle.HeaderTemplate>
                                                     <DataTemplate>
                                                         <Border BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="0,0,0,1" Margin="0,4,0,2" Padding="0,2,0,4">
@@ -1042,9 +1183,8 @@
                                     </ListBox>
                                     
                                     <!-- Action buttons -->
-                                    <Grid>
+                                    <Grid Grid.Row="3">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
@@ -1058,17 +1198,7 @@
                                                 </ControlTemplate>
                                             </Button.Template>
                                         </Button>
-                                        <Button Name="BtnPoolItemDelete" Grid.Column="1" Content="Delete" Height="22" Margin="3,0,3,0"
-                                                Background="#FFFF5722" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
-                                            <Button.Template>
-                                                <ControlTemplate TargetType="Button">
-                                                    <Border CornerRadius="3" Background="{TemplateBinding Background}">
-                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    </Border>
-                                                </ControlTemplate>
-                                            </Button.Template>
-                                        </Button>
-                                        <Button Name="BtnPoolItemCancel" Grid.Column="2" Content="Cancel" Height="22" Margin="3,0,0,0"
+                                        <Button Name="BtnPoolItemCancel" Grid.Column="1" Content="Cancel" Height="22" Margin="3,0,0,0"
                                                 Background="#FF55555C" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
                                             <Button.Template>
                                                 <ControlTemplate TargetType="Button">
@@ -1079,167 +1209,201 @@
                                             </Button.Template>
                                         </Button>
                                     </Grid>
-                                </StackPanel>
+                                </Grid>
                             </Border>
                         </Grid>
                     </TabItem>
                     
                     <!-- Tab 1: Appearance Settings -->
                     <TabItem>
-                        <ScrollViewer Background="Transparent" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,5,0,0" Height="460">
-                            <StackPanel Margin="0,0,10,0">
-                                <!-- Slider: Hold Delay -->
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="105"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="50"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Hold Delay:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
-                                    <Slider Name="DelaySlider" Grid.Column="1" Minimum="200" Maximum="1000" Value="400" IsSnapToTickEnabled="True" TickFrequency="50" VerticalAlignment="Center"/>
-                                    <TextBlock Name="DelayValueText" Grid.Column="2" Text="400 ms" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
-                                </Grid>
-                                
-                                <!-- Slider: Core Radius -->
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="105"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="50"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Core Radius:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
-                                    <Slider Name="CoreRadiusSlider" Grid.Column="1" Minimum="30" Maximum="70" Value="45" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"/>
-                                    <TextBlock Name="CoreRadiusValueText" Grid.Column="2" Text="45 px" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
-                                </Grid>
-                                
-                                <!-- Slider: Petal Width -->
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="105"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="50"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Petal Width:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
-                                    <Slider Name="PetalWidthSlider" Grid.Column="1" Minimum="35" Maximum="90" Value="60" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"/>
-                                    <TextBlock Name="PetalWidthValueText" Grid.Column="2" Text="60 px" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
-                                </Grid>
-                                
-                                <!-- Slider: Ring Spacing -->
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="105"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="50"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Ring Spacing:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
-                                    <Slider Name="RingSpacingSlider" Grid.Column="1" Minimum="0" Maximum="15" Value="5" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"/>
-                                    <TextBlock Name="RingSpacingValueText" Grid.Column="2" Text="5 px" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
-                                </Grid>
-                                
-                                <!-- Slider: Sector Spacing -->
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="105"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="50"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Sector Spacing:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
-                                    <Slider Name="SectorSpacingSlider" Grid.Column="1" Minimum="0" Maximum="10" Value="3" IsSnapToTickEnabled="True" TickFrequency="0.5" VerticalAlignment="Center"/>
-                                    <TextBlock Name="SectorSpacingValueText" Grid.Column="2" Text="3.0 px" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
-                                </Grid>
-                                
-                                <!-- Divider -->
-                                <Border BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="0,0,0,1" Margin="0,5,0,10"/>
-                                
-                                <!-- Slider: L2 Max Petal Angle -->
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="105"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="50"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="L2 Max Angle:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
-                                    <Slider Name="L2MaxAngleSlider" Grid.Column="1" Minimum="30" Maximum="180" Value="90" IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center"/>
-                                    <TextBlock Name="L2MaxAngleValueText" Grid.Column="2" Text="90°" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
-                                </Grid>
-                                
-                                <!-- Slider: L3 Max Petal Angle -->
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="105"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="50"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="L3 Max Angle:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
-                                    <Slider Name="L3MaxAngleSlider" Grid.Column="1" Minimum="30" Maximum="180" Value="90" IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center"/>
-                                    <TextBlock Name="L3MaxAngleValueText" Grid.Column="2" Text="90°" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
-                                </Grid>
-                                
-                                <!-- Divider -->
-                                <Border BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="0,0,0,1" Margin="0,5,0,10"/>
-                                
-                                <!-- Theme Presets Dropdown -->
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="105"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Theme Preset:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
-                                    <ComboBox Name="ThemeComboBox" Grid.Column="1" Height="24" FontSize="11" VerticalContentAlignment="Center" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}">
-                                        <ComboBoxItem Content="Revit Theme (Auto)"/>
-                                        <ComboBoxItem Content="pyRevit Dark"/>
-                                        <ComboBoxItem Content="Neon Fusion"/>
-                                        <ComboBoxItem Content="Classic Blue"/>
-                                        <ComboBoxItem Content="Forest Green"/>
-                                        <ComboBoxItem Content="Cyberpunk"/>
-                                        <ComboBoxItem Content="Custom Theme"/>
-                                    </ComboBox>
-                                </Grid>
-                                
-                                <!-- Custom Color Hex Inputs -->
-                                <TextBlock Text="Custom Hex Colors (e.g. #AARRGGBB)" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" FontWeight="Bold" Margin="0,5,0,8"/>
-                                
-                                <!-- Normal Fill -->
-                                <Grid Margin="0,0,0,6">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="105"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Normal Fill:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
-                                    <TextBox Name="HexNormalText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
-                                </Grid>
-                                
-                                <!-- Hover Start Fill -->
-                                <Grid Margin="0,0,0,6">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="105"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Hover Start:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
-                                    <TextBox Name="HexHoverStartText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
-                                </Grid>
-                                
-                                <!-- Hover End Fill -->
-                                <Grid Margin="0,0,0,6">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="105"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Hover End:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
-                                    <TextBox Name="HexHoverEndText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
-                                </Grid>
-                                
-                                <!-- Border Fill -->
-                                <Grid Margin="0,0,0,6">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="105"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Border:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
-                                    <TextBox Name="HexBorderText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
-                                </Grid>
+                        <Grid Margin="0,5,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <ScrollViewer Grid.Row="0" Background="Transparent" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Height="425">
+                                <StackPanel Margin="0,0,10,0">
+                                    <!-- ComboBox: Trigger Mode -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Trigger Mode:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <ComboBox Name="TriggerModeComboBox" Grid.Column="1" Height="24" FontSize="11" VerticalContentAlignment="Center" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}">
+                                            <ComboBoxItem Content="Right Hold"/>
+                                            <ComboBoxItem Content="Right Double Click"/>
+                                        </ComboBox>
+                                    </Grid>
+
+                                    <!-- Slider: Hold Delay -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Hold Delay:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <Slider Name="DelaySlider" Grid.Column="1" Minimum="200" Maximum="1000" Value="400" IsSnapToTickEnabled="True" TickFrequency="50" VerticalAlignment="Center"/>
+                                        <TextBlock Name="DelayValueText" Grid.Column="2" Text="400 ms" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    
+                                    <!-- Slider: Core Radius -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Core Radius:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <Slider Name="CoreRadiusSlider" Grid.Column="1" Minimum="30" Maximum="70" Value="45" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"/>
+                                        <TextBlock Name="CoreRadiusValueText" Grid.Column="2" Text="45 px" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    
+                                    <!-- Slider: Petal Width -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Petal Width:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <Slider Name="PetalWidthSlider" Grid.Column="1" Minimum="35" Maximum="90" Value="60" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"/>
+                                        <TextBlock Name="PetalWidthValueText" Grid.Column="2" Text="60 px" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    
+                                    <!-- Slider: Ring Spacing -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Ring Spacing:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <Slider Name="RingSpacingSlider" Grid.Column="1" Minimum="0" Maximum="15" Value="5" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"/>
+                                        <TextBlock Name="RingSpacingValueText" Grid.Column="2" Text="5 px" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    
+                                    <!-- Slider: Sector Spacing -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Sector Spacing:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <Slider Name="SectorSpacingSlider" Grid.Column="1" Minimum="0" Maximum="10" Value="3" IsSnapToTickEnabled="True" TickFrequency="0.5" VerticalAlignment="Center"/>
+                                        <TextBlock Name="SectorSpacingValueText" Grid.Column="2" Text="3.0 px" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    
+                                    <!-- Divider -->
+                                    <Border BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="0,0,0,1" Margin="0,5,0,10"/>
+                                    
+                                    <!-- Slider: L2 Max Petal Angle -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="L2 Max Angle:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <Slider Name="L2MaxAngleSlider" Grid.Column="1" Minimum="30" Maximum="180" Value="90" IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center"/>
+                                        <TextBlock Name="L2MaxAngleValueText" Grid.Column="2" Text="90°" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    
+                                    <!-- Slider: L3 Max Petal Angle -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="L3 Max Angle:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <Slider Name="L3MaxAngleSlider" Grid.Column="1" Minimum="30" Maximum="180" Value="90" IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center"/>
+                                        <TextBlock Name="L3MaxAngleValueText" Grid.Column="2" Text="90°" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    
+                                    <!-- Divider -->
+                                    <Border BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="0,0,0,1" Margin="0,5,0,10"/>
+                                    
+                                    <!-- Theme Presets Dropdown -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Theme Preset:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <ComboBox Name="ThemeComboBox" Grid.Column="1" Height="24" FontSize="11" VerticalContentAlignment="Center" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}">
+                                            <ComboBoxItem Content="Revit Theme (Auto)"/>
+                                            <ComboBoxItem Content="pyRevit Dark"/>
+                                            <ComboBoxItem Content="Neon Fusion"/>
+                                            <ComboBoxItem Content="Classic Blue"/>
+                                            <ComboBoxItem Content="Forest Green"/>
+                                            <ComboBoxItem Content="Cyberpunk"/>
+                                            <ComboBoxItem Content="Custom Theme"/>
+                                        </ComboBox>
+                                    </Grid>
+                                    
+                                    <!-- Custom Color Hex Inputs -->
+                                    <TextBlock Text="Custom Hex Colors (e.g. #AARRGGBB)" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" FontWeight="Bold" Margin="0,5,0,8"/>
+                                    
+                                    <!-- Normal Fill -->
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Normal Fill:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                        <TextBox Name="HexNormalText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
+                                    </Grid>
+                                    
+                                    <!-- Hover Start Fill -->
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Hover Start:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                        <TextBox Name="HexHoverStartText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
+                                    </Grid>
+                                    
+                                    <!-- Hover End Fill -->
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Hover End:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                        <TextBox Name="HexHoverEndText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
+                                    </Grid>
+                                    
+                                    <!-- Border Fill -->
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Border:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                        <TextBox Name="HexBorderText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
+                                    </Grid>
+                                </StackPanel>
+                            </ScrollViewer>
+                            
+                            <!-- Exit Settings Button -->
+                            <StackPanel Grid.Row="1" Margin="0,12,10,0">
+                                <Button Name="BtnExitCustomizerLook" Content="Exit Settings" Height="24"
+                                        Background="#FF55555C" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
                             </StackPanel>
-                        </ScrollViewer>
+                        </Grid>
                     </TabItem>
                     
                     <!-- Hidden legacy tab placeholders to keep XAML name references valid -->
@@ -1257,7 +1421,7 @@
                                 <TextBox Name="SearchBox" Height="26" Padding="5,2" 
                                            Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" BorderThickness="1" 
                                            VerticalContentAlignment="Center" FontSize="11"/>
-                                <TextBlock IsHitTestVisible="False" Text="Search pyRevit commands..." VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8,0,0,0" Foreground="{DynamicResource CustomizerSecText}" FontSize="11">
+                                <TextBlock IsHitTestVisible="False" Text="Search commands (pyRevit &amp; Revit Ribbon)..." VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8,0,0,0" Foreground="{DynamicResource CustomizerSecText}" FontSize="11">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Visibility" Value="Collapsed"/>
@@ -1395,9 +1559,140 @@
                                 </TreeView.ItemTemplate>
                             </TreeView>
                             
-                            <!-- Add selected command -->
-                            <Button Name="BtnPickerAddCommand" Grid.Row="2" Content="Add Selected Command to Pool" Height="26"
-                                    Background="#FF4CAF50" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                            <!-- Picker buttons -->
+                            <Grid Grid.Row="2" Margin="0,5,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <Button Name="BtnPickerAddCommand" Grid.Column="0" Content="Add Selected Command to Pool" Height="26" Margin="0,0,5,0"
+                                        Background="#FF4CAF50" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                
+                                <Button Name="BtnPickerCancel" Grid.Column="1" Content="Cancel" Height="26"
+                                        Background="#FF757575" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </Grid>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+                
+                <!-- Icon Picker Overlay -->
+                <Grid Name="IconPickerOverlay" Grid.Row="0" Grid.RowSpan="2" Background="#F5202026" Visibility="Collapsed" Margin="-15">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/> <!-- Header / Title -->
+                        <RowDefinition Height="Auto"/> <!-- Search Box -->
+                        <RowDefinition Height="*"/>    <!-- Icons Grid List -->
+                        <RowDefinition Height="Auto"/> <!-- Buttons -->
+                    </Grid.RowDefinitions>
+                    
+                    <Border Grid.Row="0" Background="#1AFFFFFF" Padding="15,10">
+                        <TextBlock Text="Select Built-in Icon" Foreground="{DynamicResource CustomizerText}" FontSize="13" FontWeight="Bold" HorizontalAlignment="Center"/>
+                    </Border>
+                    
+                    <!-- Search Box -->
+                    <Grid Grid.Row="1" Margin="15,10,15,10">
+                        <TextBox Name="IconPickerSearchBox" Height="26" Padding="5,2" 
+                                 Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" BorderThickness="1" 
+                                 VerticalContentAlignment="Center" FontSize="11"/>
+                        <TextBlock IsHitTestVisible="False" Text="Search icons..." VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8,0,0,0" Foreground="{DynamicResource CustomizerSecText}" FontSize="11">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=IconPickerSearchBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                    
+                    <!-- Icons ListBox (with WrapPanel to display a grid of icons) -->
+                    <ListBox Name="IconPickerListBox" Grid.Row="2" Background="Transparent" BorderThickness="0" Margin="15,0,15,10"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Margin="0" Orientation="Horizontal" IsItemsHost="True"/>
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Margin" Value="2"/>
+                                <Setter Property="Width" Value="58"/>
+                                <Setter Property="Height" Value="58"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="ItemBorder" CornerRadius="4" Background="{TemplateBinding Background}" BorderThickness="1" BorderBrush="Transparent" Padding="4">
+                                                <ContentPresenter/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="ItemBorder" Property="Background" Value="#15FFFFFF"/>
+                                                    <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#30FFFFFF"/>
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="ItemBorder" Property="Background" Value="#2500E5FF"/>
+                                                    <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#FF00E5FF"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ToolTip="{Binding Name}">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="32"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Image Source="{Binding FullPath}" Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Grid.Row="0"/>
+                                    <TextBlock Text="{Binding CleanName}" FontSize="8" Foreground="{DynamicResource CustomizerSecText}" HorizontalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" Grid.Row="1" Width="50" Margin="0,2,0,0"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    
+                    <!-- Footer Buttons -->
+                    <Border Grid.Row="3" Background="#10FFFFFF" Padding="15,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Name="BtnIconPickerSelect" Grid.Column="0" Content="Select" Height="26" Margin="0,0,5,0"
+                                    Background="#FF0083B0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11" FontWeight="Bold">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                            <Button Name="BtnIconPickerCancel" Grid.Column="1" Content="Cancel" Height="26" Margin="5,0,0,0"
+                                    Background="#FF55555C" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border CornerRadius="4" Background="{TemplateBinding Background}">
@@ -1407,8 +1702,8 @@
                                 </Button.Template>
                             </Button>
                         </Grid>
-                    </TabItem>
-                </TabControl>
+                    </Border>
+                </Grid>
             </Grid>
         </Border>
     </Grid>
