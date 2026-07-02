@@ -5,6 +5,8 @@ Provides thread-safe window creation, closing, DPI scaling,
 UI-thread dispatching, and AppDomain-based singleton persistence.
 """
 
+import threading
+
 # ---------------------------------------------------------------------------
 # .NET / WPF imports (graceful fallback)
 # ---------------------------------------------------------------------------
@@ -59,6 +61,9 @@ def get_dpi_scale():
 # ---------------------------------------------------------------------------
 
 
+_active_delegates = set()
+_active_delegates_lock = threading.Lock()
+
 def dispatch_to_ui_thread(action, dispatcher=None):
     """Run *action* on the WPF UI thread.
 
@@ -77,7 +82,19 @@ def dispatch_to_ui_thread(action, dispatcher=None):
     if not _HAS_WPF:
         raise RuntimeError("WPF assemblies are not available.")
 
-    wrapped = Action(action)
+    def wrapped_action():
+        try:
+            action()
+        finally:
+            global _active_delegates
+            with _active_delegates_lock:
+                _active_delegates.discard(wrapped)
+
+    wrapped = Action(wrapped_action)
+    global _active_delegates
+    with _active_delegates_lock:
+        _active_delegates.add(wrapped)
+
     if dispatcher:
         dispatcher.BeginInvoke(wrapped)
     elif Application.Current:

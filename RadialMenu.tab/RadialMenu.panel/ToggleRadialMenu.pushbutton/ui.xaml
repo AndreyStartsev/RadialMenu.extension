@@ -290,6 +290,7 @@
                         <Border Name="BtnL1_1LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL1_1Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
+                        <TextBlock Name="BtnL1_1Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
                     </StackPanel>
                 </Canvas>
             </Button>
@@ -303,6 +304,7 @@
                         <Border Name="BtnL1_2LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL1_2Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
+                        <TextBlock Name="BtnL1_2Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
                     </StackPanel>
                 </Canvas>
             </Button>
@@ -316,6 +318,7 @@
                         <Border Name="BtnL1_3LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL1_3Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
+                        <TextBlock Name="BtnL1_3Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
                     </StackPanel>
                 </Canvas>
             </Button>
@@ -329,6 +332,7 @@
                         <Border Name="BtnL1_4LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL1_4Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
+                        <TextBlock Name="BtnL1_4Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
                     </StackPanel>
                 </Canvas>
             </Button>
@@ -342,6 +346,7 @@
                         <Border Name="BtnL1_5LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL1_5Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
+                        <TextBlock Name="BtnL1_5Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
                     </StackPanel>
                 </Canvas>
             </Button>
@@ -355,6 +360,7 @@
                         <Border Name="BtnL1_6LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL1_6Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
+                        <TextBlock Name="BtnL1_6Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
                     </StackPanel>
                 </Canvas>
             </Button>
@@ -368,6 +374,7 @@
                         <Border Name="BtnL1_7LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL1_7Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
+                        <TextBlock Name="BtnL1_7Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
                     </StackPanel>
                 </Canvas>
             </Button>
@@ -381,6 +388,7 @@
                         <Border Name="BtnL1_8LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL1_8Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
+                        <TextBlock Name="BtnL1_8Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
                     </StackPanel>
                 </Canvas>
             </Button>
@@ -394,6 +402,7 @@
                         <Border Name="BtnL1_9LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL1_9Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
+                        <TextBlock Name="BtnL1_9Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
                     </StackPanel>
                 </Canvas>
             </Button>
@@ -407,6 +416,7 @@
                         <Border Name="BtnL1_10LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL1_10Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
+                        <TextBlock Name="BtnL1_10Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
                     </StackPanel>
                 </Canvas>
             </Button>
@@ -423,7 +433,8 @@
                             <Border Name="BtnL2_1LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL2_1Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL2_1Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL2_2" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -436,7 +447,8 @@
                             <Border Name="BtnL2_2LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL2_2Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL2_2Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL2_3" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -449,7 +461,8 @@
                             <Border Name="BtnL2_3LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL2_3Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL2_3Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL2_4" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -462,7 +475,8 @@
                             <Border Name="BtnL2_4LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL2_4Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL2_4Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL2_5" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -475,7 +489,8 @@
                             <Border Name="BtnL2_5LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL2_5Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL2_5Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL2_6" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -488,7 +503,8 @@
                             <Border Name="BtnL2_6LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL2_6Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL2_6Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL2_7" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -501,7 +517,8 @@
                             <Border Name="BtnL2_7LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL2_7Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL2_7Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL2_8" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -514,7 +531,8 @@
                             <Border Name="BtnL2_8LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL2_8Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL2_8Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL2_9" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -527,7 +545,8 @@
                             <Border Name="BtnL2_9LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL2_9Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL2_9Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL2_10" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -540,7 +559,8 @@
                             <Border Name="BtnL2_10LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL2_10Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL2_10Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
             </Canvas>
@@ -557,7 +577,8 @@
                             <Border Name="BtnL3_1LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL3_1Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL3_1Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL3_2" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -570,7 +591,8 @@
                             <Border Name="BtnL3_2LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL3_2Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL3_2Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL3_3" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -583,7 +605,8 @@
                             <Border Name="BtnL3_3LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL3_3Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL3_3Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL3_4" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -596,7 +619,8 @@
                             <Border Name="BtnL3_4LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL3_4Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL3_4Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL3_5" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -609,7 +633,8 @@
                             <Border Name="BtnL3_5LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL3_5Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL3_5Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL3_6" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -622,7 +647,8 @@
                             <Border Name="BtnL3_6LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL3_6Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL3_6Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL3_7" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -635,7 +661,8 @@
                             <Border Name="BtnL3_7LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL3_7Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL3_7Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL3_8" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -648,7 +675,8 @@
                             <Border Name="BtnL3_8LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL3_8Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL3_8Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL3_9" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -661,7 +689,8 @@
                             <Border Name="BtnL3_9LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL3_9Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL3_9Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
                 <Button Name="BtnL3_10" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
@@ -674,7 +703,8 @@
                             <Border Name="BtnL3_10LabelBorder" Style="{StaticResource LabelBorderStyle}">
                             <TextBlock Name="BtnL3_10Label" Text="" Style="{StaticResource LabelTextStyle}"/>
                         </Border>
-                        </StackPanel>
+                            <TextBlock Name="BtnL3_10Arrow" Text="▼" FontSize="7" Foreground="#80FFFFFF" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                    </StackPanel>
                     </Canvas>
                 </Button>
             </Canvas>
@@ -757,9 +787,7 @@
                 TextOptions.TextFormattingMode="Display"
                 TextOptions.TextRenderingMode="ClearType"
                 RenderOptions.ClearTypeHint="Enabled">
-            <Border.Effect>
-                <DropShadowEffect Color="#000000" BlurRadius="25" ShadowDepth="4" Opacity="0.6"/>
-            </Border.Effect>
+
             
             <Grid>
                 <Grid.RowDefinitions>
@@ -816,7 +844,9 @@
                                 <!-- Pool TreeView -->
                                 <TreeView Grid.Row="1" Name="PoolTreeView" Background="Transparent" BorderThickness="0"
                                           ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,0,4"
-                                          HorizontalContentAlignment="Stretch" AllowDrop="True">
+                                          HorizontalContentAlignment="Stretch" AllowDrop="True"
+                                          VirtualizingStackPanel.IsVirtualizing="True"
+                                          VirtualizingStackPanel.VirtualizationMode="Recycling">
                                     <TreeView.ItemContainerStyle>
                                         <Style TargetType="TreeViewItem">
                                             <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
@@ -871,7 +901,7 @@
                                                                         </ToggleButton.Style>
                                                                     </ToggleButton>
                                                                     
-                                                                    <ContentPresenter Grid.Column="1" ContentSource="Header" HorizontalAlignment="Stretch"/>
+                                                                    <ContentPresenter Grid.Column="1" Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}" ContentStringFormat="{TemplateBinding HeaderStringFormat}" HorizontalAlignment="Stretch"/>
                                                                 </Grid>
                                                             </Border>
                                                             
@@ -1142,7 +1172,10 @@
                                     </StackPanel>
                                     
                                     <ListBox Grid.Row="2" Name="EditClassList" Style="{x:Null}" Background="Transparent" BorderThickness="0"
-                                             ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,2,0,6">
+                                             ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,2,0,6"
+                                             VirtualizingStackPanel.IsVirtualizing="True"
+                                             VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                             VirtualizingStackPanel.IsVirtualizingWhenGrouping="True">
                                         <ListBox.Template>
                                             <ControlTemplate TargetType="ListBox">
                                                 <ScrollViewer Background="Transparent" Focusable="False">
@@ -1163,7 +1196,7 @@
                                                             <Setter.Value>
                                                                 <ControlTemplate TargetType="GroupItem">
                                                                     <StackPanel>
-                                                                        <ContentPresenter Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}" />
+                                                                        <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" />
                                                                         <ItemsPresenter Margin="10,0,0,0" />
                                                                     </StackPanel>
                                                                 </ControlTemplate>
@@ -1437,7 +1470,9 @@
                             
                             <!-- Commands TreeView -->
                             <TreeView Name="CommandTreeView" Grid.Row="1" Background="Transparent" BorderThickness="0" 
-                                      ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
+                                      ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,0,8"
+                                      VirtualizingStackPanel.IsVirtualizing="True"
+                                      VirtualizingStackPanel.VirtualizationMode="Recycling">
                                 <TreeView.ItemContainerStyle>
                                     <Style TargetType="TreeViewItem">
                                         <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
@@ -1488,7 +1523,7 @@
                                                                         </Style>
                                                                     </ToggleButton.Style>
                                                                 </ToggleButton>
-                                                                <ContentPresenter x:Name="PART_Header" Grid.Column="1" ContentSource="Header" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                                                <ContentPresenter x:Name="PART_Header" Grid.Column="1" Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}" ContentStringFormat="{TemplateBinding HeaderStringFormat}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="4,0,0,0"/>
                                                             </Grid>
                                                         </Border>
                                                         <ItemsPresenter x:Name="ItemsHost" Grid.Row="1" Margin="14,0,0,0"/>

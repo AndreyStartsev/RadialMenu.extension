@@ -38,6 +38,13 @@ except (ImportError, Exception):
     PostableCommand = None
     RevitCommandId = None
     Transaction = None
+
+def _ids_equal(id1, id2):
+    if id1 is None or id2 is None:
+        return id1 is id2
+    if hasattr(id1, "Value"):
+        return id1.Value == id2.Value
+    return id1.IntegerValue == id2.IntegerValue
     ViewDetailLevel = None
 
 
@@ -235,7 +242,7 @@ def _cmd_zoom_to_fit(uidoc):
     """Zoom to Fit in the active view."""
     active_view = uidoc.ActiveView
     for ui_view in uidoc.GetOpenUIViews():
-        if ui_view.ViewId == active_view.Id:
+        if _ids_equal(ui_view.ViewId, active_view.Id):
             ui_view.ZoomToFit()
             break
 
@@ -270,7 +277,7 @@ def _cmd_close_hidden(uiapp, uidoc):
             "Falling back to manual close loop."
         )
         for ui_view in uidoc.GetOpenUIViews():
-            if ui_view.ViewId != uidoc.ActiveView.Id:
+            if not _ids_equal(ui_view.ViewId, uidoc.ActiveView.Id):
                 try:
                     ui_view.Close()
                 except Exception as e:

@@ -88,7 +88,10 @@ def get_current_context(uiapp):
         if category is None:
             return context
 
-        cat_id = category.Id.IntegerValue
+        if hasattr(category.Id, "Value"):
+            cat_id = int(category.Id.Value)
+        else:
+            cat_id = category.Id.IntegerValue
 
         # Fast integer look-up
         if cat_id in CATEGORY_MAP:

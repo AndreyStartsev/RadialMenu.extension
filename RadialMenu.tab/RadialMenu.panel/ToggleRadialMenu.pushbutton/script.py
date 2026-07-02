@@ -9,6 +9,16 @@ import math
 import threading
 import json
 
+try:
+    unicode
+except NameError:
+    unicode = str
+
+_IS_REVIT_DARK = False
+_active_close_delegates = []
+_active_open_delegates = []
+_delegate_lock = threading.Lock()
+
 # Reference required .NET assemblies
 clr.AddReference("WindowsBase")
 clr.AddReference("PresentationCore")
@@ -18,6 +28,25 @@ clr.AddReference("System.Drawing")
 
 from System.Windows import Window, Visibility, Application, Thickness, SystemParameters
 from System.Windows.Media import VisualTreeHelper, SolidColorBrush, ColorConverter, Brushes, Geometry
+
+_brush_cache = {}
+_brush_cache_lock = threading.Lock()
+
+def get_cached_brush(hex_str):
+    with _brush_cache_lock:
+        if hex_str not in _brush_cache:
+            try:
+                brush = SolidColorBrush(ColorConverter.ConvertFromString(hex_str))
+                brush.Freeze()
+                _brush_cache[hex_str] = brush
+            except:
+                # Fallback to unfrozen SolidColorBrush if freezing fails
+                try:
+                    _brush_cache[hex_str] = SolidColorBrush(ColorConverter.ConvertFromString(hex_str))
+                except:
+                    return Brushes.Transparent
+        return _brush_cache[hex_str]
+
 from System.Windows.Controls import TreeViewItem
 from pyrevit.framework import wpf
 from pyrevit import HOST_APP, forms
@@ -152,6 +181,16 @@ def safe_traceback():
     except:
         return u"Failed to format traceback"
 
+def get_id_value(el_id):
+    if el_id is None:
+        return None
+    try:
+        if hasattr(el_id, "Value"):
+            return int(el_id.Value)
+        return el_id.IntegerValue
+    except:
+        return None
+
 def log_debug(msg):
     try:
         if isinstance(msg, str):
@@ -285,15 +324,10 @@ def get_revit_theme_colors():
 def resolve_themed_icon(icon_path):
     if not icon_path:
         return icon_path
-    try:
-        from Autodesk.Revit.UI import UIThemeManager, UITheme
-        is_revit_dark = (UIThemeManager.CurrentTheme == UITheme.Dark)
-    except:
-        is_revit_dark = False
-        
+    global _IS_REVIT_DARK
     base, ext = os.path.splitext(icon_path)
     if ext.lower() == ".png":
-        if is_revit_dark:
+        if _IS_REVIT_DARK:
             if not base.endswith(".dark"):
                 dark_path = base + ".dark" + ext
                 if os.path.exists(dark_path):
@@ -315,6 +349,11 @@ def load_bitmap_image_themed(img_path):
         if not os.path.exists(img_path):
             return None
             
+        # Verify file size is not zero to prevent decoder crashes
+        if os.path.getsize(img_path) == 0:
+            log_debug(u"Warning: icon file is empty (0 bytes): {}".format(img_path))
+            return None
+            
         from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption, BitmapCreateOptions
         from System import Uri
         
@@ -326,64 +365,12 @@ def load_bitmap_image_themed(img_path):
         bi.EndInit()
         
         try:
-            from Autodesk.Revit.UI import UIThemeManager, UITheme
-            is_revit_dark = (UIThemeManager.CurrentTheme == UITheme.Dark)
+            bi.Freeze()
         except:
-            is_revit_dark = False
-            
-        if not is_revit_dark:
-            return bi
-            
-        # Do not invert if it is a native dark image (.dark.png)
-        if img_path.lower().endswith(".dark.png"):
-            return bi
-            
-        try:
-            from System.Windows.Media.Imaging import WriteableBitmap
-            from System.Windows import Int32Rect
-            import System
-            
-            wb = WriteableBitmap(bi)
-            width = wb.PixelWidth
-            height = wb.PixelHeight
-            stride = width * 4
-            
-            pixels = System.Array.CreateInstance(System.Byte, stride * height)
-            wb.CopyPixels(pixels, stride, 0)
-            
-            # Check if it's grayscale and dark
-            is_grayscale = True
-            total_lum = 0
-            count = 0
-            for i in range(0, len(pixels), 4):
-                a = pixels[i+3]
-                if a > 30: # Only count visible pixels
-                    b = pixels[i]
-                    g = pixels[i+1]
-                    r = pixels[i+2]
-                    if abs(r - g) > 25 or abs(r - b) > 25 or abs(g - b) > 25:
-                        is_grayscale = False
-                    lum = 0.299 * r + 0.587 * g + 0.114 * b
-                    total_lum += lum
-                    count += 1
-                    
-            avg_lum = total_lum / count if count > 0 else 255
-            # Invert grayscale dark/black icons
-            if is_grayscale and avg_lum < 140:
-                for i in range(0, len(pixels), 4):
-                    pixels[i] = 255 - pixels[i]
-                    pixels[i+1] = 255 - pixels[i+1]
-                    pixels[i+2] = 255 - pixels[i+2]
-                
-                wb.WritePixels(Int32Rect(0, 0, width, height), pixels, stride, 0)
-                wb.Freeze()
-                return wb
-        except Exception as ex:
-            log_debug(u"Error inverting icon pixels: {}".format(safe_str(ex)))
+            pass
             
         return bi
-    except Exception as ex:
-        log_debug(u"Error loading themed bitmap: {}".format(safe_str(ex)))
+    except:
         return None
 
 def clean_id_part(name):
@@ -757,6 +744,18 @@ _rbutton_down_y = 0
 _is_holding = False
 _menu_opened_by_hold = False
 _active_window = None
+_window_lock = threading.Lock()
+
+def get_active_window():
+    global _active_window
+    with _window_lock:
+        return _active_window
+
+def set_active_window(win):
+    global _active_window
+    with _window_lock:
+        _active_window = win
+
 _ui_dispatcher = None
 _hold_delay_ms = 400
 _trigger_mode = "hold"
@@ -766,6 +765,7 @@ _last_rbutton_down_y = 0
 _menu_opened_by_double_click = False
 _selection_before_click = None
 _cached_commands = None
+_cached_commands_lock = threading.Lock()
 
 def get_statusbar_text():
     try:
@@ -892,7 +892,8 @@ try:
             
     _event_handler = RevitEventHandler()
     _ext_event = ExternalEvent.Create(_event_handler)
-except:
+except Exception as ex:
+    log_debug(u"CRITICAL: Failed to initialize ExternalEvent / RevitEventHandler: {}".format(safe_str(ex)))
     _event_handler = None
     _ext_event = None
 
@@ -1079,11 +1080,14 @@ class TreeItem(object):
 
     @property
     def IconPath(self):
-        if self._icon_path and isinstance(self._icon_path, (str, unicode)):
-            if not hasattr(self, "_cached_icon_source"):
-                self._cached_icon_source = load_bitmap_image_themed(self._icon_path)
-            return self._cached_icon_source
-        return self._icon_path
+        try:
+            if self._icon_path and isinstance(self._icon_path, (str, unicode)):
+                if not hasattr(self, "_cached_icon_source"):
+                    self._cached_icon_source = load_bitmap_image_themed(self._icon_path)
+                return self._cached_icon_source
+            return None
+        except:
+            return None
 
     @property
     def UniqueId(self):
@@ -1323,7 +1327,7 @@ def classify_element_type(name, category_groups=None):
     name_lower = name.lower()
     
     # Exclude model text/curve
-    if "modeltext" in name_lower or "modelcurve" in name_lower:
+    if "modeltext" in name_lower or "modelcurve" in name_lower or name_lower == "sprinklers" or name_lower == "sprinkler":
         return "Model Elements"
         
     annotation_keywords = [
@@ -1409,7 +1413,7 @@ class PoolListItem(object):
     @property
     def EyeBrush(self):
         if not self._item.get("is_active", True):
-            return SolidColorBrush(ColorConverter.ConvertFromString("#FFE53935"))  # Red
+            return get_cached_brush("#FFE53935")  # Red
             
         is_visible = True
         if self._window:
@@ -1418,14 +1422,14 @@ class PoolListItem(object):
         is_light = getattr(self._window, "_is_light", False)
         if is_light:
             if is_visible:
-                return SolidColorBrush(ColorConverter.ConvertFromString("#FF1E1E24"))  # Dark
+                return get_cached_brush("#FF1E1E24")  # Dark
             else:
-                return SolidColorBrush(ColorConverter.ConvertFromString("#FFB0B0B0"))  # Lighter grey
+                return get_cached_brush("#FFB0B0B0")  # Lighter grey
         else:
             if is_visible:
-                return SolidColorBrush(ColorConverter.ConvertFromString("#FFFFFFFF"))  # White
+                return get_cached_brush("#FFFFFFFF")  # White
             else:
-                return SolidColorBrush(ColorConverter.ConvertFromString("#FF757575"))  # Grey
+                return get_cached_brush("#FF757575")  # Grey
 
     @property
     def EyeGeometry(self):
@@ -1473,7 +1477,9 @@ class PoolListItem(object):
     @property
     def Icon(self):
         val = self._item.get("icon", "")
-        if val and (val.lower().endswith(".png") or os.path.sep in val or "/" in val):
+        if not val:
+            return None
+        if val.lower().endswith(".png") or os.path.sep in val or "/" in val:
             try:
                 # Resolve the absolute path if needed
                 img_path = val
@@ -1483,6 +1489,7 @@ class PoolListItem(object):
                     return load_bitmap_image_themed(img_path)
             except:
                 pass
+            return None
         return val
 
     @property
@@ -1562,14 +1569,18 @@ class ContextRulesDialog(Window):
                 if doc:
                     for cat in doc.Settings.Categories:
                         if cat.Name:
-                            reflected.append(cat.Name)
-                            try:
-                                if str(cat.CategoryType) == "Annotation":
-                                    category_groups[cat.Name] = "Annotation Elements"
-                                elif str(cat.CategoryType) == "Model":
-                                    category_groups[cat.Name] = "Model Elements"
-                            except Exception as cat_type_ex:
-                                log_debug("Failed to get CategoryType for {}: {}".format(cat.Name, cat_type_ex))
+                            clean_eng = get_clean_english_category_name(cat)
+                            if clean_eng:
+                                reflected.append(clean_eng)
+                                try:
+                                    cat_type = cat.CategoryType
+                                    cat_type_str = str(cat_type)
+                                    if cat_type == db.CategoryType.Annotation or "Annotation" in cat_type_str:
+                                        category_groups[clean_eng] = "Annotation Elements"
+                                    else:
+                                        category_groups[clean_eng] = "Model Elements"
+                                except Exception as cat_type_ex:
+                                    log_debug("Failed to get CategoryType for {}: {}".format(clean_eng, cat_type_ex))
         except Exception as cat_ex:
             log_debug("Failed to get categories in ContextRulesDialog: " + str(cat_ex))
             
@@ -1578,7 +1589,7 @@ class ContextRulesDialog(Window):
         intersected_classes_set = set(self.intersected_classes) if self.intersected_classes else set()
 
         def get_sort_key(c):
-            is_allowed = c in allowed_classes_set
+            is_allowed = any(alias in allowed_classes_set for alias in get_category_aliases(c))
             is_intersected = c in intersected_classes_set
             if is_allowed and is_intersected:
                 prio = 0
@@ -1596,7 +1607,7 @@ class ContextRulesDialog(Window):
         self.classes_collection = ObservableCollection[object]()
         
         for name in reflected:
-            is_checked = name in allowed_classes
+            is_checked = any(alias in allowed_classes for alias in get_category_aliases(name))
             group_name = classify_element_type(name, category_groups)
             item = ClassItem(name, is_checked, group_name)
             self.all_classes_items.append(item)
@@ -1608,7 +1619,8 @@ class ContextRulesDialog(Window):
         from System.Windows.Data import CollectionViewSource, PropertyGroupDescription
         from System import Predicate
         self.classes_view = CollectionViewSource.GetDefaultView(self.classes_collection)
-        self.classes_view.Filter = Predicate[object](self.dialog_classes_filter_predicate)
+        self._dialog_classes_filter_delegate = Predicate[object](self.dialog_classes_filter_predicate)
+        self.classes_view.Filter = self._dialog_classes_filter_delegate
         self.classes_view.GroupDescriptions.Add(PropertyGroupDescription("Group"))
         
         # Hook search and buttons
@@ -1660,6 +1672,89 @@ class ContextRulesDialog(Window):
 # Radial Menu WPF Controller
 class RadialMenuWindow(Window):
     def __init__(self, xaml_path, active_context="default"):
+        # Hook global unhandled exceptions to log tracebacks before crashing
+        try:
+            import System
+            def global_unhandled_handler(sender, args):
+                try:
+                    ex = args.ExceptionObject
+                    log_debug("UNHANDLED APPDOMAIN EXCEPTION: " + str(ex))
+                except:
+                    pass
+            System.AppDomain.CurrentDomain.UnhandledException += global_unhandled_handler
+            
+            def dispatcher_unhandled_handler(sender, args):
+                try:
+                    ex = args.Exception
+                    log_debug("UNHANDLED DISPATCHER EXCEPTION: " + str(ex))
+                    import traceback
+                    log_debug(traceback.format_exc())
+                except:
+                    pass
+            self.Dispatcher.UnhandledException += dispatcher_unhandled_handler
+            log_debug("Registered global and dispatcher unhandled exception hooks.")
+        except Exception as hooks_ex:
+            log_debug("Failed to register exception hooks: " + str(hooks_ex))
+            
+        # Query theme and cache it in the global module-level variable safely on the main thread
+        try:
+            from Autodesk.Revit.UI import UIThemeManager, UITheme
+            global _IS_REVIT_DARK
+            _IS_REVIT_DARK = (UIThemeManager.CurrentTheme == UITheme.Dark)
+            log_debug(u"Cached Revit Dark Theme status: {}".format(_IS_REVIT_DARK))
+        except Exception as theme_ex:
+            log_debug(u"Failed to query Revit theme at startup: {}".format(safe_str(theme_ex)))
+            
+        # Pre-load Revit classes and categories safely on the main thread
+        self._preloaded_classes = []
+        self._preloaded_category_groups = {}
+        try:
+            import Autodesk.Revit.DB as db
+            reflected = []
+            
+            # 1. Reflect assembly types
+            try:
+                assembly = System.Reflection.Assembly.GetAssembly(db.Element)
+                try:
+                    types = assembly.GetTypes()
+                except:
+                    import sys
+                    ex_ref = sys.exc_info()[1]
+                    types = getattr(ex_ref, "Types", None) or []
+                for t in types:
+                    if t and t.IsClass and t.IsSubclassOf(db.Element) and t.Namespace == "Autodesk.Revit.DB":
+                        reflected.append(t.Name)
+            except Exception as ref_ex:
+                log_debug("Failed to reflect classes in __init__: " + safe_str(ref_ex))
+                reflected = ["Wall", "Floor", "Pipe", "Duct", "FamilyInstance", "Dimension"]
+                
+            # 2. Get categories from active document
+            try:
+                uiapp = HOST_APP.uiapp
+                if uiapp and uiapp.ActiveUIDocument:
+                    doc = uiapp.ActiveUIDocument.Document
+                    for cat in doc.Settings.Categories:
+                        if cat.Name:
+                            clean_eng = get_clean_english_category_name(cat)
+                            if clean_eng:
+                                reflected.append(clean_eng)
+                                try:
+                                    cat_type = cat.CategoryType
+                                    cat_type_str = str(cat_type)
+                                    if cat_type == db.CategoryType.Annotation or "Annotation" in cat_type_str:
+                                        self._preloaded_category_groups[clean_eng] = "Annotation Elements"
+                                    else:
+                                        self._preloaded_category_groups[clean_eng] = "Model Elements"
+                                except:
+                                    pass
+            except Exception as cat_ex:
+                log_debug("Failed to get categories in __init__: " + safe_str(cat_ex))
+                
+            self._preloaded_classes = sorted(list(set(reflected)))
+            log_debug("Preloaded {} classes and categories on the main thread successfully.".format(len(self._preloaded_classes)))
+        except Exception as main_ex:
+            log_debug("Exception during class/category preloading in __init__: " + safe_str(main_ex))
+            
         self._is_closing = False
         self.customizer_mode = False
         self._is_light = False
@@ -2024,23 +2119,24 @@ class RadialMenuWindow(Window):
                 current_state = get_current_selection_state()
                 sel_classes = getattr(self, "_current_revit_sel_classes", set())
                 
-            # B. Check allowed_selection_states
-            if "allowed_selection_states" in rules:
-                allowed_states = rules["allowed_selection_states"] or []
-                if allowed_states:
-                    if current_state not in allowed_states:
+            # B. Check allowed_selection_states and allowed_classes
+            allowed_states = rules.get("allowed_selection_states", []) or []
+            allowed_classes = rules.get("allowed_classes", []) or []
+            
+            if allowed_states or allowed_classes:
+                effective_states = allowed_states if allowed_states else ["Selection", "Pre-highlighted"]
+                if current_state not in effective_states:
+                    return False
+                
+                if allowed_classes:
+                    class_match = False
+                    if sel_classes:
+                        for c in allowed_classes:
+                            if c in sel_classes:
+                                class_match = True
+                                break
+                    if not class_match:
                         return False
-                    
-                    allowed_classes = rules.get("allowed_classes", [])
-                    if allowed_classes:
-                        class_match = False
-                        if sel_classes:
-                            for c in allowed_classes:
-                                if c in sel_classes:
-                                    class_match = True
-                                    break
-                        if not class_match:
-                            return False
                                 
             return True
         except:
@@ -2103,7 +2199,17 @@ class RadialMenuWindow(Window):
             image_element = getattr(self, btn_name + "Image")
             emoji_element = getattr(self, btn_name + "Emoji")
             label_element = getattr(self, btn_name + "Label")
+            arrow_element = getattr(self, btn_name + "Arrow", None)
             
+            pool_item = getattr(self, "_button_to_pool_item", {}).get(btn_name)
+            is_pulldown = pool_item.get("is_pulldown", False) if pool_item else False
+            
+            if arrow_element:
+                if is_pulldown:
+                    arrow_element.Visibility = Visibility.Visible
+                else:
+                    arrow_element.Visibility = Visibility.Collapsed
+                    
             label_element.Text = name
             
             img_path = None
@@ -2191,21 +2297,8 @@ class RadialMenuWindow(Window):
         except Exception as hook_ex:
             log_debug(u"Failed to stop hook during customizer setup: {}".format(safe_str(hook_ex)))
         
-        # Trigger icon extraction on UI thread when idle
-        try:
-            from System.Windows.Threading import DispatcherPriority
-            from System import Action
-            
-            def run_extraction():
-                try:
-                    extract_icons_from_ribbon()
-                except Exception as ex:
-                    log_debug("Background extraction failed: " + str(ex))
-                    
-            self.Dispatcher.BeginInvoke(DispatcherPriority.Background, Action(run_extraction))
-            log_debug("Scheduled ribbon icon extraction on UI thread.")
-        except Exception as ex:
-            log_debug("Failed to schedule icon extraction: " + str(ex))
+        # Skip ribbon icon extraction because fallback icons are already loaded on disk
+        log_debug("Skipping ribbon icon extraction to prevent Revit native thread exceptions.")
 
         # Set Move mode active by default
         self._move_mode_active = True
@@ -2227,14 +2320,14 @@ class RadialMenuWindow(Window):
                 if self.CustomizerBorder.Parent:
                     self.MainGrid.Children.Remove(self.CustomizerBorder)
                 
-                from System.Windows import Window, WindowStyle, ResizeMode, Thickness, CornerRadius
+                from System.Windows import Window, WindowStyle, ResizeMode, Thickness
                 from System.Windows.Shell import WindowChrome
                 from System.Windows.Media import Brushes
                 
                 cust_win = Window()
                 cust_win.Title = "Radial Menu Customizer"
-                cust_win.Width = 680
-                cust_win.Height = 640
+                cust_win.Width = 820
+                cust_win.Height = 680
                 cust_win.WindowStyle = getattr(WindowStyle, "None")
                 cust_win.ResizeMode = ResizeMode.CanResize
                 cust_win.AllowsTransparency = True
@@ -2242,12 +2335,9 @@ class RadialMenuWindow(Window):
                 cust_win.ShowInTaskbar = False
                 cust_win.UseLayoutRounding = True
                 
-                # Apply WindowChrome to enable borderless resizing
                 chrome = WindowChrome()
                 chrome.CaptionHeight = 0
                 chrome.ResizeBorderThickness = Thickness(6)
-                chrome.GlassFrameThickness = Thickness(0)
-                chrome.CornerRadius = CornerRadius(0)
                 WindowChrome.SetWindowChrome(cust_win, chrome)
                 
                 # Copy resources so themes/styles work inside CustomizerBorder
@@ -2971,7 +3061,7 @@ class RadialMenuWindow(Window):
         try:
             self._move_mode_active = True
             
-            from System.Windows import GridLength, Visibility
+            from System.Windows import Visibility
             from System.Windows.Media import SolidColorBrush, ColorConverter
             
             # Highlight Move button, dim others
@@ -2980,12 +3070,17 @@ class RadialMenuWindow(Window):
             self.BtnCoreAppearance.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFC107"))
             self.BtnCoreExit.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFE53935"))
             
-            # Collapse customizer panel for Move mode
+            # Collapse customizer panel inside customizer window
             self.CustomizerBorder.Visibility = Visibility.Collapsed
-            self.CustomizerColumn.Width = GridLength(0)
-            self.Width = 640
             
-            log_debug(u"Move mode activated. Customizer panel collapsed.")
+            # Hide separate customizer window
+            if hasattr(self, "customizer_window") and self.customizer_window:
+                try:
+                    self.customizer_window.Hide()
+                except Exception as hide_ex:
+                    log_debug("Failed to hide customizer window: " + str(hide_ex))
+            
+            log_debug(u"Move mode activated. Customizer window hidden.")
         except Exception as ex:
             log_debug(u"Error in on_core_move_clicked: {}".format(safe_str(ex)))
 
@@ -2993,7 +3088,7 @@ class RadialMenuWindow(Window):
         try:
             self._move_mode_active = False
             
-            from System.Windows import GridLength, Visibility
+            from System.Windows import Visibility
             from System.Windows.Media import SolidColorBrush, ColorConverter
             
             # Highlight Pool button
@@ -3004,11 +3099,17 @@ class RadialMenuWindow(Window):
             
             # Expand customizer panel, switch to Tab 0 (Command Pool)
             self.CustomizerBorder.Visibility = Visibility.Visible
-            self.CustomizerColumn.Width = GridLength(680)
-            self.Width = 1320
             self.CustomizerTabControl.SelectedIndex = 0
             
-            log_debug(u"Pool mode activated. Switched to Command Pool tab.")
+            # Show separate customizer window
+            if hasattr(self, "customizer_window") and self.customizer_window:
+                try:
+                    self.customizer_window.Show()
+                    self.customizer_window.Activate()
+                except Exception as show_ex:
+                    log_debug("Failed to show customizer window: " + str(show_ex))
+            
+            log_debug(u"Pool mode activated. Customizer window shown and switched to Command Pool tab.")
         except Exception as ex:
             log_debug(u"Error in on_core_pool_clicked: {}".format(safe_str(ex)))
 
@@ -3016,7 +3117,7 @@ class RadialMenuWindow(Window):
         try:
             self._move_mode_active = False
             
-            from System.Windows import GridLength, Visibility
+            from System.Windows import Visibility
             from System.Windows.Media import SolidColorBrush, ColorConverter
             
             # Highlight Appearance button
@@ -3027,11 +3128,17 @@ class RadialMenuWindow(Window):
             
             # Expand customizer panel, switch to Tab 1 (Appearance)
             self.CustomizerBorder.Visibility = Visibility.Visible
-            self.CustomizerColumn.Width = GridLength(680)
-            self.Width = 1320
             self.CustomizerTabControl.SelectedIndex = 1
             
-            log_debug(u"Appearance mode activated. Switched to Appearance tab.")
+            # Show separate customizer window
+            if hasattr(self, "customizer_window") and self.customizer_window:
+                try:
+                    self.customizer_window.Show()
+                    self.customizer_window.Activate()
+                except Exception as show_ex:
+                    log_debug("Failed to show customizer window: " + str(show_ex))
+            
+            log_debug(u"Appearance mode activated. Customizer window shown and switched to Appearance tab.")
         except Exception as ex:
             log_debug(u"Error in on_core_appearance_clicked: {}".format(safe_str(ex)))
 
@@ -3202,7 +3309,7 @@ class RadialMenuWindow(Window):
         if getattr(self, "_restore_revit_focus", True):
             self.restore_revit_focus()
             
-        _active_window = None
+        set_active_window(None)
         log_debug(u"RadialMenuWindow closed, _active_window cleared.")
 
     # ==================== POOL LIST UI METHODS ====================
@@ -3318,46 +3425,56 @@ class RadialMenuWindow(Window):
             return
             
         try:
-            import Autodesk.Revit.DB as db
-            reflected = []
-            category_groups = {}
+            category_groups = getattr(self, "_preloaded_category_groups", {}) or {}
+            reflected = list(getattr(self, "_preloaded_classes", []))
             
-            # 1. Reflect Revit assembly types
-            try:
-                assembly = System.Reflection.Assembly.GetAssembly(db.Element)
-                types = assembly.GetTypes()
-                for t in types:
-                    if t.IsClass and t.IsSubclassOf(db.Element) and t.Namespace == "Autodesk.Revit.DB":
-                        reflected.append(t.Name)
-            except Exception as ex:
-                log_debug("Failed to reflect Revit classes: " + str(ex))
-                reflected = ["Wall", "Floor", "Pipe", "Duct", "FamilyInstance", "Dimension"]
-                
-            # 2. Get Category names from document
-            try:
-                uiapp = HOST_APP.uiapp
-                if uiapp and uiapp.ActiveUIDocument:
-                    doc = uiapp.ActiveUIDocument.Document
-                    for cat in doc.Settings.Categories:
-                        if cat.Name:
-                            reflected.append(cat.Name)
-                            eng_names = get_english_names_for_category(cat)
-                            for eng in eng_names:
-                                reflected.append(eng)
-                            try:
-                                if str(cat.CategoryType) == "Annotation":
-                                    category_groups[cat.Name] = "Annotation Elements"
-                                    for eng in eng_names:
-                                        category_groups[eng] = "Annotation Elements"
-                                elif str(cat.CategoryType) == "Model":
-                                    category_groups[cat.Name] = "Model Elements"
-                                    for eng in eng_names:
-                                        category_groups[eng] = "Model Elements"
-                            except:
-                                pass
-            except Exception as cat_ex:
-                log_debug("Failed to get categories: " + str(cat_ex))
-                
+            # Fallback if preloading failed
+            if not reflected:
+                import Autodesk.Revit.DB as db
+                category_groups = {}
+                reflected = []
+                # 1. Reflect Revit assembly types
+                try:
+                    assembly = System.Reflection.Assembly.GetAssembly(db.Element)
+                    try:
+                        types = assembly.GetTypes()
+                    except:
+                        import sys
+                        ex_ref = sys.exc_info()[1]
+                        types = getattr(ex_ref, "Types", None) or []
+                    for t in types:
+                        if t and t.IsClass and t.IsSubclassOf(db.Element) and t.Namespace == "Autodesk.Revit.DB":
+                            reflected.append(t.Name)
+                except:
+                    import sys
+                    ex = sys.exc_info()[1]
+                    log_debug("Failed to reflect Revit classes fallback: " + str(ex))
+                    reflected = ["Wall", "Floor", "Pipe", "Duct", "FamilyInstance", "Dimension"]
+                    
+                # 2. Get Category names from document
+                try:
+                    uiapp = HOST_APP.uiapp
+                    if uiapp and uiapp.ActiveUIDocument:
+                        doc = uiapp.ActiveUIDocument.Document
+                        for cat in doc.Settings.Categories:
+                            if cat.Name:
+                                clean_eng = get_clean_english_category_name(cat)
+                                if clean_eng:
+                                    reflected.append(clean_eng)
+                                    try:
+                                        cat_type = cat.CategoryType
+                                        cat_type_str = str(cat_type)
+                                        if cat_type == db.CategoryType.Annotation or "Annotation" in cat_type_str:
+                                            category_groups[clean_eng] = "Annotation Elements"
+                                        else:
+                                            category_groups[clean_eng] = "Model Elements"
+                                    except:
+                                        pass
+                except:
+                    import sys
+                    cat_ex = sys.exc_info()[1]
+                    log_debug("Failed to get categories fallback: " + str(cat_ex))
+
             # 3. Get currently selected element classes from Revit (ONCE)
             intersected_classes = []
             try:
@@ -3388,7 +3505,9 @@ class RadialMenuWindow(Window):
                                 for s in selected_classes_sets[1:]:
                                     common = common.intersection(s)
                                 intersected_classes = list(common)
-            except Exception as sel_ex:
+            except:
+                import sys
+                sel_ex = sys.exc_info()[1]
                 log_debug("Failed to get selection classes for initialization sorting: " + str(sel_ex))
                 
             self._intersected_classes_set = set(intersected_classes)
@@ -3416,11 +3535,14 @@ class RadialMenuWindow(Window):
             from System.Windows.Data import CollectionViewSource, PropertyGroupDescription
             from System import Predicate
             self._classes_view = CollectionViewSource.GetDefaultView(self._classes_collection)
-            self._classes_view.Filter = Predicate[object](self.classes_filter_predicate)
+            self._classes_filter_delegate = Predicate[object](self.classes_filter_predicate)
+            self._classes_view.Filter = self._classes_filter_delegate
             self._classes_view.GroupDescriptions.Add(PropertyGroupDescription("Group"))
             
             self._revit_classes_initialized = True
-        except Exception as ex:
+        except:
+            import sys
+            ex = sys.exc_info()[1]
             log_debug("Error initializing Revit classes list: " + str(ex))
 
     def on_pool_selection_changed(self, sender, args):
@@ -3475,7 +3597,7 @@ class RadialMenuWindow(Window):
             
             self._updating_ui_elements = True
             for c_item in getattr(self, "_all_classes_items", []):
-                c_item.IsChecked = c_item.Name in self._allowed_classes_set
+                c_item.IsChecked = any(alias in self._allowed_classes_set for alias in get_category_aliases(c_item.Name))
                 
             # Refresh CollectionView to update UI bindings instantly
             if hasattr(self, "_classes_view") and self._classes_view:
@@ -3487,7 +3609,9 @@ class RadialMenuWindow(Window):
             self.EditClassList.IsEnabled = has_filtering
             
             self._updating_ui_elements = False
-        except Exception as ex:
+        except:
+            import sys
+            ex = sys.exc_info()[1]
             log_debug(u"Error in on_pool_selection_changed: {}".format(safe_str(ex)))
     
     def on_save_edit_clicked(self, sender, args):
@@ -3638,7 +3762,7 @@ class RadialMenuWindow(Window):
             self._allowed_classes_set = set(allowed_classes)
             
             for c_item in getattr(self, "_all_classes_items", []):
-                c_item.IsChecked = c_item.Name in self._allowed_classes_set
+                c_item.IsChecked = any(alias in self._allowed_classes_set for alias in get_category_aliases(c_item.Name))
                 
             if hasattr(self, "_classes_view") and self._classes_view:
                 self._classes_view.Refresh()
@@ -3724,43 +3848,38 @@ class RadialMenuWindow(Window):
         self._cached_icon_items = icon_items
         return icon_items
 
+    def update_visible_icons(self):
+        try:
+            query = getattr(self, "_icon_search_query", "").strip().lower()
+            all_icons = self.load_all_icons()
+            
+            filtered = []
+            for icon in all_icons:
+                if not query or query in icon.Name.lower() or query in icon.CleanName.lower():
+                    filtered.append(icon)
+                    if len(filtered) >= 150:  # Hard limit of 150 visible items to prevent UI lag/crashes!
+                        break
+                        
+            from System.Collections.ObjectModel import ObservableCollection
+            self._icon_collection = ObservableCollection[object]()
+            for icon in filtered:
+                self._icon_collection.Add(icon)
+                
+            self.IconPickerListBox.ItemsSource = self._icon_collection
+        except Exception as ex:
+            log_debug("Error updating visible icons: " + str(ex))
+
     def on_select_icon_clicked(self, sender, args):
         try:
-            # Load icons if not loaded
-            icons = self.load_all_icons()
-            
-            # Populate ObservableCollection (only once or clear and re-populate)
-            if not hasattr(self, "_icon_collection") or not self._icon_collection:
-                from System.Collections.ObjectModel import ObservableCollection
-                from System.Windows.Data import CollectionViewSource
-                from System import Predicate
-                
-                self._icon_collection = ObservableCollection[object]()
-                for icon in icons:
-                    self._icon_collection.Add(icon)
-                    
-                self.IconPickerListBox.ItemsSource = self._icon_collection
-                self._icon_view = CollectionViewSource.GetDefaultView(self._icon_collection)
-                self._icon_view.Filter = Predicate[object](self.icon_filter_predicate)
-                
-            # Reset search text
             self._icon_search_query = ""
             self.IconPickerSearchBox.Text = ""
-            if hasattr(self, "_icon_view") and self._icon_view:
-                self._icon_view.Refresh()
+            self.update_visible_icons()
             
             # Show overlay
             self.IconPickerOverlay.Visibility = Visibility.Visible
             log_debug("Opened Icon Picker overlay.")
         except Exception as ex:
             log_debug("Error opening Icon Picker: " + str(ex))
-
-    def icon_filter_predicate(self, obj):
-        query = getattr(self, "_icon_search_query", "")
-        if not query:
-            return True
-        icon = obj
-        return query in icon.Name.lower() or query in icon.CleanName.lower()
 
     def on_icon_picker_search_changed(self, sender, args):
         self._icon_search_timer.Stop()
@@ -3770,8 +3889,7 @@ class RadialMenuWindow(Window):
         self._icon_search_timer.Stop()
         try:
             self._icon_search_query = self.IconPickerSearchBox.Text.strip().lower() if self.IconPickerSearchBox.Text else ""
-            if hasattr(self, "_icon_view") and self._icon_view:
-                self._icon_view.Refresh()
+            self.update_visible_icons()
         except Exception as ex:
             log_debug("Error in icon search tick: " + str(ex))
 
@@ -4024,7 +4142,9 @@ class RadialMenuWindow(Window):
                 
                 self.select_tree_node_by_item(new_item)
                 log_debug(u"Added command '{}' (type: {}) to pool.".format(display_name, cmd_type))
-        except Exception as ex:
+        except:
+            import sys
+            ex = sys.exc_info()[1]
             log_debug(u"Error in on_picker_add_command_clicked: {}".format(safe_str(ex)))
             
     def on_pool_list_button_click(self, sender, args):
@@ -4060,7 +4180,9 @@ class RadialMenuWindow(Window):
                     self.update_radial_geometry()
                     
                     log_debug(u"Toggled command '{}' active state to {}.".format(item.get("name"), item["is_active"]))
-        except Exception as ex:
+        except:
+            import sys
+            ex = sys.exc_info()[1]
             log_debug("Error in on_pool_list_button_click: " + str(ex))
 
     def delete_pool_item(self, item):
@@ -4120,7 +4242,7 @@ class RadialMenuWindow(Window):
             # classes that are part of the active selection (intersected classes),
             # or the top common Revit classes/categories.
             # This keeps the list small and fast, avoiding rendering 2,000 offscreen check boxes!
-            is_allowed = item.Name in getattr(self, "_allowed_classes_set", set())
+            is_allowed = any(alias in getattr(self, "_allowed_classes_set", set()) for alias in get_category_aliases(item.Name))
             is_intersected = item.Name in getattr(self, "_intersected_classes_set", set())
             is_common = item.Name in COMMON_REVIT_CLASSES
             return is_allowed or is_intersected or is_common
@@ -4450,14 +4572,13 @@ class RadialMenuWindow(Window):
         except Exception as ex:
             log_debug(u"Error in on_petal_mouse_up: {}".format(safe_str(ex)))
             args.Handled = True
-        except Exception as ex:
-            log_debug(u"Error in on_petal_mouse_up: {}".format(safe_str(ex)))
 
     def find_all_commands_safe(self):
         global _cached_commands
-        if _cached_commands is not None:
-            log_debug(u"Returning cached pyRevit commands.")
-            return _cached_commands
+        with _cached_commands_lock:
+            if _cached_commands is not None:
+                log_debug(u"Returning cached pyRevit commands.")
+                return _cached_commands
 
         log_debug(u"Loading active pyRevit commands safely...")
         cmds = []
@@ -4557,7 +4678,8 @@ class RadialMenuWindow(Window):
                 log_debug(u"Filesystem scan failed for ext {}: {}".format(ext_dir, safe_str(e_scan)))
             
         log_debug(u"Total resolved commands: {}".format(len(cmds)))
-        _cached_commands = cmds
+        with _cached_commands_lock:
+            _cached_commands = cmds
         return cmds
 
     def load_pyrevit_commands(self):
@@ -4569,6 +4691,7 @@ class RadialMenuWindow(Window):
             self._ribbon_commands = []
             log_debug(u"Error pre-loading Ribbon commands: {}".format(safe_str(ex)))
             
+        self._commands_worker_dispatcher = self.Dispatcher
         t = threading.Thread(target=self._async_load_commands_worker)
         t.daemon = True
         t.start()
@@ -4624,59 +4747,80 @@ class RadialMenuWindow(Window):
                 # Build signatures of discovered pyRevit commands to filter them out of Revit Ribbon list
                 pyrevit_sigs = set()
                 for p_cmd in parsed_list:
-                    t_clean = "".join(c for c in p_cmd["title"].lower() if c.isalnum())
-                    tab_clean = "".join(c for c in p_cmd["tab_name"].lower() if c.isalnum())
-                    pd_clean = "".join(c for c in (p_cmd["pulldown_name"] or "").lower() if c.isalnum())
-                    pyrevit_sigs.add((t_clean, tab_clean, pd_clean))
-                    if not pd_clean:
-                        pyrevit_sigs.add((t_clean, tab_clean, ""))
+                    try:
+                        p_title = p_cmd.get("title") or ""
+                        p_tab = p_cmd.get("tab_name") or ""
+                        p_pd = p_cmd.get("pulldown_name") or ""
+                        t_clean = "".join(c for c in p_title.lower() if c.isalnum())
+                        tab_clean = "".join(c for c in p_tab.lower() if c.isalnum())
+                        pd_clean = "".join(c for c in p_pd.lower() if c.isalnum())
+                        pyrevit_sigs.add((t_clean, tab_clean, pd_clean))
+                        if not pd_clean:
+                            pyrevit_sigs.add((t_clean, tab_clean, ""))
+                    except:
+                        pass
                 
+                # Pre-clean pyRevit unique IDs for fast substring matching
+                precleaned_pcmds = []
+                for p_cmd in parsed_list:
+                    try:
+                        p_uid = p_cmd.get("unique_id") or ""
+                        uid_clean = "".join(c for c in p_uid.lower() if c.isalnum())
+                        precleaned_pcmds.append(uid_clean)
+                    except:
+                        pass
+
                 seen_ribbon_ids = set()
                 for r_cmd in ribbon_cmds:
-                    cmd_id = r_cmd["id"]
-                    title = r_cmd["title"]
-                    tab_name = r_cmd["tab"]
-                    panel_name = r_cmd["panel"]
-                    
-                    # Clean properties of Ribbon command
-                    r_title_clean = "".join(c for c in title.lower() if c.isalnum())
-                    r_tab_clean = "".join(c for c in tab_name.lower() if c.isalnum())
-                    r_panel_clean = "".join(c for c in panel_name.lower() if c.isalnum())
-                    
-                    is_pyrevit_match = False
-                    if (r_title_clean, r_tab_clean, r_panel_clean) in pyrevit_sigs:
-                        is_pyrevit_match = True
-                    elif (r_title_clean, r_tab_clean, "") in pyrevit_sigs:
-                        is_pyrevit_match = True
+                    try:
+                        cmd_id = r_cmd.get("id")
+                        title = r_cmd.get("title") or ""
+                        tab_name = r_cmd.get("tab") or ""
+                        panel_name = r_cmd.get("panel") or ""
                         
-                    if not is_pyrevit_match:
-                        # Fallback match: if pyRevit command unique_id matches a substring of the Ribbon ID
-                        r_id_clean = "".join(c for c in cmd_id.lower() if c.isalnum())
-                        for p_cmd in parsed_list:
-                            uid_clean = "".join(c for c in p_cmd["unique_id"].lower() if c.isalnum())
-                            if uid_clean in r_id_clean:
-                                is_pyrevit_match = True
-                                break
-                                
-                    if is_pyrevit_match:
-                        continue
-                    
-                    seen_ribbon_ids.add(cmd_id.lower())
-                    
-                    # Find matching icon file in extracted_icons
-                    safe_filename = "".join([c for c in cmd_id if c.isalnum() or c in ("_", "-")]).strip()
-                    icon_path = os.path.join(icons_dir, safe_filename + ".png")
-                    if not os.path.exists(icon_path):
-                        icon_path = None
+                        if not cmd_id:
+                            continue
+                            
+                        # Clean properties of Ribbon command
+                        r_title_clean = "".join(c for c in title.lower() if c.isalnum())
+                        r_tab_clean = "".join(c for c in tab_name.lower() if c.isalnum())
+                        r_panel_clean = "".join(c for c in panel_name.lower() if c.isalnum())
                         
-                    parsed_list.append({
-                        "title": u"{} ({})".format(title, cmd_id),
-                        "unique_id": cmd_id,
-                        "icon_path": resolve_themed_icon(icon_path) if icon_path else None,
-                        "ext_name": u"Revit Ribbon",
-                        "tab_name": tab_name,
-                        "pulldown_name": panel_name
-                    })
+                        is_pyrevit_match = False
+                        if (r_title_clean, r_tab_clean, r_panel_clean) in pyrevit_sigs:
+                            is_pyrevit_match = True
+                        elif (r_title_clean, r_tab_clean, "") in pyrevit_sigs:
+                            is_pyrevit_match = True
+                            
+                        if not is_pyrevit_match:
+                            # Fallback match: if pyRevit command unique_id matches a substring of the Ribbon ID
+                            r_id_clean = "".join(c for c in cmd_id.lower() if c.isalnum())
+                            for uid_clean in precleaned_pcmds:
+                                if uid_clean in r_id_clean:
+                                    is_pyrevit_match = True
+                                    break
+                                    
+                        if is_pyrevit_match:
+                            continue
+                        
+                        seen_ribbon_ids.add(cmd_id.lower())
+                        
+                        # Find matching icon file in extracted_icons
+                        safe_filename = "".join([c for c in cmd_id if c.isalnum() or c in ("_", "-")]).strip()
+                        icon_path = os.path.join(icons_dir, safe_filename + ".png")
+                        if not os.path.exists(icon_path):
+                            icon_path = None
+                            
+                        parsed_list.append({
+                            "title": u"{} ({})".format(title, cmd_id),
+                            "unique_id": cmd_id,
+                            "icon_path": resolve_themed_icon(icon_path) if icon_path else None,
+                            "ext_name": u"Revit Ribbon",
+                            "tab_name": tab_name,
+                            "pulldown_name": panel_name
+                        })
+                    except:
+                        pass
                 
                 # 5. Load remaining offline/unused icons from extracted_icons folder as fallback
                 if os.path.exists(icons_dir):
@@ -4711,7 +4855,9 @@ class RadialMenuWindow(Window):
                                 fallback_count += 1
                     if fallback_count > 0:
                         log_debug(u"Loaded {} additional Revit commands from extracted_icons as fallback.".format(fallback_count))
-            except Exception as e_builtin:
+            except:
+                import sys
+                e_builtin = sys.exc_info()[1]
                 log_debug(u"Failed to load Revit Ribbon commands in worker: {}".format(safe_str(e_builtin)))
                 
             self._all_commands = parsed_list
@@ -4720,14 +4866,19 @@ class RadialMenuWindow(Window):
                 try:
                     self.filter_commands(None)
                     log_debug(u"Async populated CommandTreeView with {} items.".format(len(self._all_commands)))
-                except Exception as ex:
+                except:
+                    import sys
+                    ex = sys.exc_info()[1]
                     log_debug(u"Error populating CommandTreeView: {}".format(safe_str(ex)))
             
-            dispatcher = self.Dispatcher
+            dispatcher = getattr(self, "_commands_worker_dispatcher", None)
             if dispatcher:
                 from System import Action
-                dispatcher.BeginInvoke(Action(populate_ui))
-        except Exception as ex:
+                self._populate_delegate = Action(populate_ui)
+                dispatcher.BeginInvoke(self._populate_delegate)
+        except:
+            import sys
+            ex = sys.exc_info()[1]
             log_debug(u"Error in _async_load_commands_worker: {}".format(safe_str(ex)))
 
     def on_search_changed(self, sender, args):
@@ -4865,19 +5016,44 @@ class RadialMenuWindow(Window):
                     populate_ext_children(ext_item, tree_data[ext_name])
                     
             self.CommandTreeView.ItemsSource = root_collection
-        except Exception as ex:
+        except:
+            import sys
+            ex = sys.exc_info()[1]
             log_debug(u"Error filtering commands: {}".format(safe_str(ex)))
 
     def on_pool_mouse_down(self, sender, args):
         try:
             dep = args.OriginalSource
-            if dep is not None and hasattr(dep, "DataContext") and isinstance(dep.DataContext, PoolListItem):
-                self._pool_drag_start = args.GetPosition(None)
+            if dep is not None:
+                # Traverse up to see if we clicked a CheckBox or Button
+                from System.Windows.Media import VisualTreeHelper
+                from System.Windows.Controls import CheckBox, Button
+                curr = dep
+                is_control = False
+                while curr is not None:
+                    if isinstance(curr, (CheckBox, Button)):
+                        is_control = True
+                        break
+                    try:
+                        curr = VisualTreeHelper.GetParent(curr)
+                    except:
+                        break
+                
+                if is_control:
+                    self._pool_drag_start = None
+                    return
+                    
+                if hasattr(dep, "DataContext") and isinstance(dep.DataContext, PoolListItem):
+                    self._pool_drag_start = args.GetPosition(None)
+                else:
+                    self._pool_drag_start = None
             else:
                 self._pool_drag_start = None
-        except Exception as ex:
+        except:
+            import sys
+            ex = sys.exc_info()[1]
             log_debug("Error in on_pool_mouse_down: " + str(ex))
-            self._pool_drag_start = args.GetPosition(None)
+            self._pool_drag_start = None
 
     def on_pool_mouse_move(self, sender, args):
         try:
@@ -4891,6 +5067,7 @@ class RadialMenuWindow(Window):
                 dy = abs(pos.Y - start_pos.Y)
                 
                 if dx > SystemParameters.MinimumHorizontalDragDistance or dy > SystemParameters.MinimumVerticalDragDistance:
+                    self._pool_drag_start = None  # Clear to prevent duplicate triggers
                     wrapper = self.PoolTreeView.SelectedItem
                     if wrapper and isinstance(wrapper, PoolListItem):
                         item = wrapper._item
@@ -4929,7 +5106,9 @@ class RadialMenuWindow(Window):
                                 self.DragPreviewPopup.HorizontalOffset = dx + 15
                                 self.DragPreviewPopup.VerticalOffset = dy + 15
                                 self.DragPreviewPopup.IsOpen = True
-                        except Exception as p_ex:
+                        except:
+                            import sys
+                            p_ex = sys.exc_info()[1]
                             log_debug("Failed to show drag preview: " + str(p_ex))
 
                         import json
@@ -4943,10 +5122,24 @@ class RadialMenuWindow(Window):
                             "pool_item_id": item.get("id")
                         }
                         cmd_json = json.dumps(cmd_dict)
-                        drag_data = System.Windows.DataObject("PyRevitCommandJSON", cmd_json)
-                        System.Windows.DragDrop.DoDragDrop(self.PoolTreeView, drag_data, System.Windows.DragDropEffects.Copy)
-                        self.clear_drag_feedback()
-        except Exception as ex:
+                        
+                        from System import Action
+                        def run_drag_drop():
+                            try:
+                                drag_data = System.Windows.DataObject("PyRevitCommandJSON", cmd_json)
+                                System.Windows.DragDrop.DoDragDrop(self.PoolTreeView, drag_data, System.Windows.DragDropEffects.Copy)
+                            except:
+                                import sys
+                                drag_ex = sys.exc_info()[1]
+                                log_debug("Async pool DoDragDrop failed: " + str(drag_ex))
+                            finally:
+                                self.clear_drag_feedback()
+                                
+                        self._pool_drag_delegate = Action(run_drag_drop)
+                        self.Dispatcher.BeginInvoke(self._pool_drag_delegate)
+        except:
+            import sys
+            ex = sys.exc_info()[1]
             log_debug(u"Error in on_pool_mouse_move: {}".format(safe_str(ex)))
 
     def _init_drag_preview(self):
@@ -5184,9 +5377,14 @@ class RadialMenuWindow(Window):
 
     def on_tree_mouse_move(self, sender, args):
         if args.LeftButton == wpf_input.MouseButtonState.Pressed:
+            start_pt = getattr(self, "_drag_start_point", None)
+            if not start_pt:
+                return
             position = args.GetPosition(None)
-            if (abs(position.X - self._drag_start_point.X) > System.Windows.SystemParameters.MinimumHorizontalDragDistance or \
-                abs(position.Y - self._drag_start_point.Y) > System.Windows.SystemParameters.MinimumVerticalDragDistance):
+            if (abs(position.X - start_pt.X) > System.Windows.SystemParameters.MinimumHorizontalDragDistance or \
+                abs(position.Y - start_pt.Y) > System.Windows.SystemParameters.MinimumVerticalDragDistance):
+                
+                self._drag_start_point = None  # Clear to prevent duplicate triggers
                 
                 from System.Windows.Media import VisualTreeHelper
                 from System.Windows.Controls import TreeViewItem
@@ -5208,8 +5406,19 @@ class RadialMenuWindow(Window):
                             "is_pulldown": getattr(cmd_item, "IsPulldown", False)
                         }
                         cmd_json = json.dumps(cmd_dict)
-                        drag_data = System.Windows.DataObject("PyRevitCommandJSON", cmd_json)
-                        System.Windows.DragDrop.DoDragDrop(dependency_obj, drag_data, System.Windows.DragDropEffects.Copy)
+                        
+                        from System import Action
+                        def run_drag_drop():
+                            try:
+                                drag_data = System.Windows.DataObject("PyRevitCommandJSON", cmd_json)
+                                System.Windows.DragDrop.DoDragDrop(dependency_obj, drag_data, System.Windows.DragDropEffects.Copy)
+                            except:
+                                import sys
+                                drag_ex = sys.exc_info()[1]
+                                log_debug("Async picker tree DoDragDrop failed: " + str(drag_ex))
+                                
+                        self._tree_drag_delegate = Action(run_drag_drop)
+                        self.Dispatcher.BeginInvoke(self._tree_drag_delegate)
 
     def on_button_drag_over(self, sender, args):
         if args.Data.GetDataPresent("PyRevitCommandJSON"):
@@ -5231,7 +5440,9 @@ class RadialMenuWindow(Window):
                     self.assign_command_to_slot_data(slot_num, cmd_data)
                 else:
                     log_debug(u"Dropped command but could not resolve slot for button '{}'.".format(sender.Name))
-            except Exception as ex:
+            except:
+                import sys
+                ex = sys.exc_info()[1]
                 log_debug(u"Failed to process dropped data: {}".format(safe_str(ex)))
             args.Handled = True
 
@@ -5659,7 +5870,8 @@ class RadialMenuWindow(Window):
                         except Exception as drag_ex:
                             log_debug("Async DoDragDrop failed: " + str(drag_ex))
                             
-                    self.Dispatcher.BeginInvoke(Action(run_drag_drop))
+                    self._menu_drag_delegate = Action(run_drag_drop)
+                    self.Dispatcher.BeginInvoke(self._menu_drag_delegate)
                     
         except Exception as ex:
             log_debug("Error in on_input_manager_pre_notify: " + str(ex))
@@ -5840,7 +6052,7 @@ def get_english_names_for_category(category):
     try:
         from Autodesk.Revit.DB import BuiltInCategory
         import System
-        bic_val = category.Id.IntegerValue
+        bic_val = get_id_value(category.Id)
         try:
             bic = System.Enum.ToObject(BuiltInCategory, bic_val)
             bic_str = bic.ToString()
@@ -5886,6 +6098,109 @@ def get_english_names_for_category(category):
         pass
     return list(set(names))
 
+def get_clean_english_category_name(category):
+    if not category:
+        return ""
+    try:
+        from Autodesk.Revit.DB import BuiltInCategory
+        import System
+        import re
+        bic_val = get_id_value(category.Id)
+        
+        # 1. Check our custom mapping first for the best name
+        mapping = {
+            -2000011: "Walls",
+            -2000032: "Floors",
+            -2000035: "Roofs",
+            -2000038: "Ceilings",
+            -2000023: "Doors",
+            -2000014: "Windows",
+            -2008065: "Pipes",
+            -2008130: "Ducts",
+            -2009000: "Conduits",
+            -2009020: "Cable Trays",
+            -2000021: "Dimensions",
+            -2000220: "Text Notes",
+            -2000010: "Grids",
+            -2000005: "Levels",
+            -2000279: "Views",
+            -2000500: "Sheets",
+            -2001140: "Mechanical Equipment",
+            -2001040: "Electrical Equipment",
+            -2001120: "Lighting Fixtures",
+            -2001160: "Plumbing Fixtures",
+            -2001320: "Structural Framing",
+            -2001330: "Structural Columns",
+            -2000080: "Stairs",
+            -2000095: "Railings",
+            -2000050: "Areas",
+            -2000160: "Rooms",
+            -2008049: "Zones",
+            -2008100: "Sprinklers",
+            -2008105: "Sprinkler Tags",
+        }
+        if bic_val in mapping:
+            return mapping[bic_val]
+            
+        # 2. Derive from BuiltInCategory enum name
+        try:
+            bic = System.Enum.ToObject(BuiltInCategory, bic_val)
+            bic_str = bic.ToString()
+            if bic_str.startswith("OST_"):
+                bic_str = bic_str[4:]
+            # Insert spaces before capital letters (e.g. SprinklerTags -> Sprinkler Tags)
+            clean_name = re.sub(r'(?<!^)(?=[A-Z])', ' ', bic_str)
+            return clean_name
+        except:
+            pass
+            
+        # 3. Fallback to localized Name
+        return category.Name or ""
+    except:
+        return category.Name or ""
+
+_CATEGORY_ALIASES_CACHE = {}
+
+def build_category_aliases_cache():
+    global _CATEGORY_ALIASES_CACHE
+    if _CATEGORY_ALIASES_CACHE:
+        return
+        
+    cache = {}
+    try:
+        from pyrevit import HOST_APP
+        uiapp = HOST_APP.uiapp
+        if uiapp and uiapp.ActiveUIDocument:
+            doc = uiapp.ActiveUIDocument.Document
+            if doc:
+                for cat in doc.Settings.Categories:
+                    cat_names = [cat.Name]
+                    cat_names.extend(get_english_names_for_category(cat))
+                    
+                    aliases = set(cat_names)
+                    for n in cat_names:
+                        if n.startswith("OST_"):
+                            aliases.add(n[4:])
+                    
+                    for name in aliases:
+                        key = name.lower().replace(" ", "").replace("_", "")
+                        cache[key] = aliases
+    except Exception as ex:
+        log_debug("Failed to build category aliases cache: " + str(ex))
+        
+    _CATEGORY_ALIASES_CACHE = cache
+
+def get_category_aliases(name):
+    if not _CATEGORY_ALIASES_CACHE:
+        build_category_aliases_cache()
+        
+    aliases = {name, name.lower(), name.replace(" ", "")}
+    key = name.lower().replace(" ", "").replace("_", "")
+    if key in _CATEGORY_ALIASES_CACHE:
+        aliases.update(_CATEGORY_ALIASES_CACHE[key])
+        
+    return aliases
+
 def get_current_context():
     context = "default"
     try:
@@ -5908,7 +6223,7 @@ def get_current_context():
                     if first_el:
                         category = first_el.Category
                         if category:
-                            cat_id = category.Id.IntegerValue
+                            cat_id = get_id_value(category.Id)
                             # Map integer category IDs
                             # OST_PipeCurves = -2008065 (Pipes)
                             # OST_DuctCurves = -2008130 (Ducts)
@@ -5943,13 +6258,14 @@ def get_current_context():
     return context
 
 def trigger_radial_menu(x, y):
-    global _active_window, _ui_dispatcher
+    global _ui_dispatcher
     log_debug(u"trigger_radial_menu called for x={}, y={}".format(x, y))
     
-    if _active_window is not None:
+    active_win = get_active_window()
+    if active_win is not None:
         try:
             # If active window is in customizer mode, DO NOT reopen or close it!
-            if getattr(_active_window, "customizer_mode", False):
+            if getattr(active_win, "customizer_mode", False):
                 log_debug(u"RadialMenuWindow is in customizer mode. Ignoring trigger_radial_menu.")
                 return
         except Exception as active_ex:
@@ -5957,29 +6273,36 @@ def trigger_radial_menu(x, y):
         try:
             # We must close the window on the UI thread to prevent thread access crashes
             def close_window():
-                global _active_window
-                if _active_window:
-                    try:
-                        _active_window.Close()
+                try:
+                    win = get_active_window()
+                    if win:
+                        win.Close()
                         log_debug(u"Closed existing window instance on UI thread.")
-                    except:
-                        pass
-                    _active_window = None
+                except:
+                    pass
+                finally:
+                    set_active_window(None)
+                    with _delegate_lock:
+                        if wrapped_close in _active_close_delegates:
+                            _active_close_delegates.remove(wrapped_close)
                     
             from System.Windows import Application
             from System import Action
+            wrapped_close = Action(close_window)
+            with _delegate_lock:
+                _active_close_delegates.append(wrapped_close)
+                
             if _ui_dispatcher:
-                _ui_dispatcher.BeginInvoke(Action(close_window))
+                _ui_dispatcher.BeginInvoke(wrapped_close)
             elif Application.Current:
-                Application.Current.Dispatcher.BeginInvoke(Action(close_window))
+                Application.Current.Dispatcher.BeginInvoke(wrapped_close)
             else:
                 from System.Windows.Threading import Dispatcher
-                Dispatcher.CurrentDispatcher.BeginInvoke(Action(close_window))
+                Dispatcher.CurrentDispatcher.BeginInvoke(wrapped_close)
         except Exception as ex:
             log_debug(u"Error dispatching close for existing window: {}".format(safe_str(ex)))
         
     def open_window():
-        global _active_window
         try:
             xaml_path = os.path.join(os.path.dirname(__file__), "ui.xaml")
             
@@ -6017,7 +6340,7 @@ def trigger_radial_menu(x, y):
             log_debug(u"Showing window at Left={}, Top={}".format(win.Left, win.Top))
             win.Show()
             win.Activate()
-            _active_window = win
+            set_active_window(win)
             log_debug(u"Window shown and activated successfully.")
         except Exception as ex:
             tb = safe_traceback()
@@ -6026,18 +6349,26 @@ def trigger_radial_menu(x, y):
             log_debug(u"CLR Exception in open_window: {}".format(safe_str(ex)))
             if hasattr(ex, "InnerException") and ex.InnerException:
                 log_debug(u"Inner CLR Exception: {}".format(safe_str(ex.InnerException)))
+        finally:
+            with _delegate_lock:
+                if wrapped_open in _active_open_delegates:
+                    _active_open_delegates.remove(wrapped_open)
  
     from System.Windows import Application
     from System import Action
     log_debug(u"Dispatching open_window onto UI thread...")
+    wrapped_open = Action(open_window)
+    with _delegate_lock:
+        _active_open_delegates.append(wrapped_open)
+        
     if _ui_dispatcher:
-        _ui_dispatcher.BeginInvoke(Action(open_window))
+        _ui_dispatcher.BeginInvoke(wrapped_open)
     elif Application.Current:
-        Application.Current.Dispatcher.BeginInvoke(Action(open_window))
+        Application.Current.Dispatcher.BeginInvoke(wrapped_open)
     else:
         log_debug(u"No UI dispatcher available! Falling back to current thread dispatcher.")
         from System.Windows.Threading import Dispatcher
-        Dispatcher.CurrentDispatcher.BeginInvoke(Action(open_window))
+        Dispatcher.CurrentDispatcher.BeginInvoke(wrapped_open)
 
 # Hook callback function logic
 def hook_callback(nCode, wParam, lParam):
@@ -6046,7 +6377,8 @@ def hook_callback(nCode, wParam, lParam):
     global _selection_before_click
     try:
         # If the active window is in customizer mode, we should ignore all hook events to prevent deadlocks and unexpected triggers
-        if _active_window and getattr(_active_window, "customizer_mode", False):
+        active_win = get_active_window()
+        if active_win and getattr(active_win, "customizer_mode", False):
             return user32.CallNextHookEx(_hook_id, nCode, wParam, lParam)
             
         if nCode >= 0:
@@ -6228,27 +6560,30 @@ class RadialMenuManager(object):
             _hook_id = None
             _hook_proc = None
             
-        if close_active_window and _active_window:
+        active_win = get_active_window()
+        if close_active_window and active_win:
             try:
                 # Close window on UI thread to prevent thread access crashes
                 def close_window():
-                    global _active_window
-                    if _active_window:
+                    win = get_active_window()
+                    if win:
                         try:
-                            _active_window.Close()
+                            win.Close()
                             log_debug(u"Closed window on stop.")
                         except:
                             pass
-                        _active_window = None
+                        set_active_window(None)
                 
                 dispatcher = self.ui_dispatcher or _ui_dispatcher
                 if dispatcher:
                     from System import Action
-                    dispatcher.BeginInvoke(Action(close_window))
+                    self._stop_close_delegate = Action(close_window)
+                    dispatcher.BeginInvoke(self._stop_close_delegate)
                 else:
                     from System.Windows.Threading import Dispatcher
                     from System import Action
-                    Dispatcher.CurrentDispatcher.BeginInvoke(Action(close_window))
+                    self._stop_close_delegate = Action(close_window)
+                    Dispatcher.CurrentDispatcher.BeginInvoke(self._stop_close_delegate)
             except Exception as ex:
                 log_debug(u"Error closing window on stop: {}".format(safe_str(ex)))
                 
@@ -6279,7 +6614,7 @@ if __name__ == "__main__":
                 log_debug(u"Failed to set Customizer Window Owner: {}".format(safe_str(owner_ex)))
                 
             # Setup customizer panel and size
-            _active_window = win
+            set_active_window(win)
             win.setup_customizer_mode()
             win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen
             win.Show()
