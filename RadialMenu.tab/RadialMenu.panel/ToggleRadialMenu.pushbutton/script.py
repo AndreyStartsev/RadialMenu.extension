@@ -1379,6 +1379,7 @@ class ClassItem(object):
         self._name = name
         self._is_checked = is_checked
         self._group = group
+        self._show_separator = False
 
     @property
     def Name(self):
@@ -1403,6 +1404,14 @@ class ClassItem(object):
     @Group.setter
     def Group(self, value):
         self._group = value
+
+    @property
+    def ShowSeparator(self):
+        return self._show_separator
+
+    @ShowSeparator.setter
+    def ShowSeparator(self, value):
+        self._show_separator = value
 
 
 
@@ -3618,18 +3627,9 @@ class RadialMenuWindow(Window):
                 self.EditChkSelection.IsChecked = True
                 
             # 5. Revit DB Classes list
-            self._init_revit_classes_list()
-            
-            allowed_classes = rules.get("allowed_classes", []) or []
-            self._allowed_classes_set = set(allowed_classes)
-            
             self._updating_ui_elements = True
-            for c_item in getattr(self, "_all_classes_items", []):
-                c_item.IsChecked = any(alias in self._allowed_classes_set for alias in get_category_aliases(c_item.Name))
-                
-            # Refresh CollectionView to update UI bindings instantly
-            if hasattr(self, "_classes_view") and self._classes_view:
-                self._classes_view.Refresh()
+            allowed_classes = rules.get("allowed_classes", []) or []
+            self.update_class_list_selection(allowed_classes)
                 
             # Enable/disable class search and list based on checkboxes
             has_filtering = (self.EditChkPrehighlighted.IsChecked == True) or (self.EditChkSelection.IsChecked == True)
@@ -3785,15 +3785,8 @@ class RadialMenuWindow(Window):
                 self.EditChkPrehighlighted.IsChecked = True
                 self.EditChkSelection.IsChecked = True
                 
-            self._init_revit_classes_list()
             allowed_classes = rules.get("allowed_classes", []) or []
-            self._allowed_classes_set = set(allowed_classes)
-            
-            for c_item in getattr(self, "_all_classes_items", []):
-                c_item.IsChecked = any(alias in self._allowed_classes_set for alias in get_category_aliases(c_item.Name))
-                
-            if hasattr(self, "_classes_view") and self._classes_view:
-                self._classes_view.Refresh()
+            self.update_class_list_selection(allowed_classes)
                 
             has_filtering = (self.EditChkPrehighlighted.IsChecked == True) or (self.EditChkSelection.IsChecked == True)
             self.EditClassSearch.IsEnabled = has_filtering
@@ -4277,10 +4270,88 @@ class RadialMenuWindow(Window):
         except:
             return True
 
+    def recalculate_class_separators(self):
+        try:
+            # Reset all separators first
+            for c_item in getattr(self, "_all_classes_items", []):
+                c_item.ShowSeparator = False
+                
+            # Find the last checked item in "Model Elements" and "Annotation Elements"
+            last_checked_model = None
+            last_checked_anno = None
+            
+            # Since the collection is sorted (checked first), we can just iterate.
+            # But wait, we should only consider currently visible items (matching the query).
+            query = ""
+            box = getattr(self, "EditClassSearch", None) or getattr(self, "TxtClassSearch", None)
+            if box and box.Text:
+                query = box.Text.lower().strip()
+                
+            for c_item in getattr(self, "_all_classes_items", []):
+                # Apply the search query filter
+                if query and query not in c_item.Name.lower():
+                    continue
+                    
+                # Apply the empty query filter (same as classes_filter_predicate)
+                if not query:
+                    is_allowed = any(alias in getattr(self, "_allowed_classes_set", set()) for alias in get_category_aliases(c_item.Name))
+                    is_intersected = c_item.Name in getattr(self, "_intersected_classes_set", set())
+                    is_common = c_item.Name in COMMON_REVIT_CLASSES
+                    if not (is_allowed or is_intersected or is_common):
+                        continue
+                        
+                if c_item.IsChecked:
+                    if c_item.Group == "Model Elements":
+                        last_checked_model = c_item
+                    elif c_item.Group == "Annotation Elements":
+                        last_checked_anno = c_item
+                        
+            if last_checked_model:
+                last_checked_model.ShowSeparator = True
+            if last_checked_anno:
+                last_checked_anno.ShowSeparator = True
+                
+            # Force UI refresh
+            if hasattr(self, "_classes_view") and self._classes_view:
+                self._classes_view.Refresh()
+        except Exception as ex:
+            log_debug("Error recalculating class separators: " + str(ex))
+
+    def update_class_list_selection(self, allowed_classes):
+        try:
+            self._init_revit_classes_list()
+            self._allowed_classes_set = set(allowed_classes)
+            
+            # 1. Update IsChecked
+            for c_item in getattr(self, "_all_classes_items", []):
+                c_item.IsChecked = any(alias in self._allowed_classes_set for alias in get_category_aliases(c_item.Name))
+                
+            # 2. Sort _all_classes_items (checked first, then alphabetically)
+            if hasattr(self, "_all_classes_items") and self._all_classes_items:
+                self._all_classes_items = sorted(
+                    self._all_classes_items,
+                    key=lambda x: (0 if x.IsChecked else 1, x.Name.lower())
+                )
+                
+            # 3. Clear and re-populate _classes_collection
+            if hasattr(self, "_classes_collection") and self._classes_collection:
+                self._classes_collection.Clear()
+                for c_item in self._all_classes_items:
+                    self._classes_collection.Add(c_item)
+                    
+            # 4. Recalculate separators
+            self.recalculate_class_separators()
+        except Exception as ex:
+            log_debug("Error updating class list selection: " + str(ex))
+
+    def on_class_checkbox_clicked(self, sender, args):
+        self.recalculate_class_separators()
+
     def on_context_class_search_changed(self, sender, args):
         try:
             if hasattr(self, "_classes_view") and self._classes_view:
                 self._classes_view.Refresh()
+            self.recalculate_class_separators()
         except Exception as ex:
             log_debug(u"Error in on_context_class_search_changed: {}".format(safe_str(ex)))
 

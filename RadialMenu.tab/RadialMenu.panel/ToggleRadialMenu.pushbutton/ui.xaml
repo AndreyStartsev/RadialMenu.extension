@@ -10,6 +10,7 @@
         WindowStartupLocation="Manual">
 
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <!-- Custom flat style for ComboBox to prevent white-on-white text issues -->
         <Style TargetType="ComboBoxItem">
             <Setter Property="Background" Value="Transparent"/>
@@ -1303,7 +1304,11 @@
                                         </ListBox.Template>
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
-                                                <CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="1" Style="{x:Null}"/>
+                                                <StackPanel>
+                                                    <CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Click="on_class_checkbox_clicked" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="1" Style="{x:Null}"/>
+                                                    <Border Height="1" Background="#55888888" Margin="0,4,0,4" SnapsToDevicePixels="True"
+                                                            Visibility="{Binding ShowSeparator, Converter={StaticResource BoolToVis}}"/>
+                                                </StackPanel>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                         <ListBox.GroupStyle>
