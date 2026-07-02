@@ -143,29 +143,10 @@
             "command": "exetnsion_sgtools_sgpyt_smartselect_type"
         }, 
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Autodem.pushbutton\\icon.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 80, 
-            "name": "Dimension\\nSprinklers", 
-            "id": "exetnsion_sgtools_sgpyt_autodem", 
-            "context_rules": {
-                "allowed_views": [
-                    "Plan"
-                ], 
-                "allowed_selection_states": [], 
-                "allowed_classes": [
-                    "Sprinklers"
-                ]
-            }, 
-            "type": "pyrevit", 
-            "command": "exetnsion_sgtools_sgpyt_autodem"
-        }, 
-        {
             "icon": "extracted_icons/ID_RBS_SPRINKLER.png", 
             "parent": null, 
             "level": 1, 
-            "priority": 90, 
+            "priority": 80, 
             "name": "New Submenu", 
             "id": "new_submenu", 
             "context_rules": {
@@ -185,9 +166,33 @@
             "command": "submenu2"
         }, 
         {
+            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Branch descinnect.pushbutton\\icon.png", 
+            "parent": "new_submenu", 
+            "level": 2, 
+            "priority": 90, 
+            "name": "Disconnect Sprinkler", 
+            "id": "exetnsion_sgtools_sgpyt_branchdescinnect", 
+            "context_rules": {
+                "allowed_views": [
+                    "3D", 
+                    "Plan", 
+                    "Sheet"
+                ], 
+                "allowed_selection_states": [
+                    "Pre-highlighted", 
+                    "Selection"
+                ], 
+                "allowed_classes": [
+                    "Sprinklers"
+                ]
+            }, 
+            "type": "pyrevit", 
+            "command": "exetnsion_sgtools_sgpyt_branchdescinnect"
+        }, 
+        {
             "icon": "G:\\My Drive\\Exetnsion.extension\\ASTools.tab\\Test.panel\\FlipSprinkler.pushbutton\\icon.png", 
-            "parent": null, 
-            "level": 1, 
+            "parent": "new_submenu", 
+            "level": 2, 
             "priority": 100, 
             "name": "FlipSprinkler", 
             "id": "exetnsion_astools_test_flipsprinkler", 
@@ -209,28 +214,23 @@
             "command": "exetnsion_astools_test_flipsprinkler"
         }, 
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Branch descinnect.pushbutton\\icon.png", 
-            "parent": null, 
-            "level": 1, 
+            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Autodem.pushbutton\\icon.png", 
+            "parent": "new_submenu", 
+            "level": 2, 
             "priority": 110, 
-            "name": "Disconnect Sprinkler", 
-            "id": "exetnsion_sgtools_sgpyt_branchdescinnect", 
+            "name": "Dimension\\nSprinklers", 
+            "id": "exetnsion_sgtools_sgpyt_autodem", 
             "context_rules": {
                 "allowed_views": [
-                    "3D", 
-                    "Plan", 
-                    "Sheet"
+                    "Plan"
                 ], 
-                "allowed_selection_states": [
-                    "Pre-highlighted", 
-                    "Selection"
-                ], 
+                "allowed_selection_states": [], 
                 "allowed_classes": [
                     "Sprinklers"
                 ]
             }, 
             "type": "pyrevit", 
-            "command": "exetnsion_sgtools_sgpyt_branchdescinnect"
+            "command": "exetnsion_sgtools_sgpyt_autodem"
         }, 
         {
             "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\testQS Plus.pushbutton\\icon.png", 
@@ -280,6 +280,39 @@
             }, 
             "type": "pyrevit", 
             "command": "exetnsion_sgtools_sgpyt_collapsefitting"
+        }, 
+        {
+            "icon": "extracted_icons/ID_SETTINGS_SNAPPING.png", 
+            "parent": null, 
+            "level": 1, 
+            "priority": 140, 
+            "name": "Snaps", 
+            "id": "ID_SETTINGS_SNAPPING", 
+            "context_rules": {}, 
+            "type": "built_in", 
+            "command": "ID_SETTINGS_SNAPPING"
+        }, 
+        {
+            "icon": "G:\\My Drive\\Exetnsion.extension\\ASTools.tab\\Test.panel\\Sprinkler autotrace.pushbutton\\icon.png", 
+            "parent": null, 
+            "level": 1, 
+            "priority": 150, 
+            "name": "Sprinkler autotrace", 
+            "id": "exetnsion_astools_test_sprinklerautotrace", 
+            "context_rules": {}, 
+            "type": "pyrevit", 
+            "command": "exetnsion_astools_test_sprinklerautotrace"
+        }, 
+        {
+            "id": "exetnsion_sgtools_sgpyt_connectvertical", 
+            "parent": null, 
+            "context_rules": {}, 
+            "level": 1, 
+            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\ConnectVertical.pushbutton\\icon.png", 
+            "type": "pyrevit", 
+            "name": "Connect\\nVertical", 
+            "command": "exetnsion_sgtools_sgpyt_connectvertical", 
+            "priority": 160
         }
     ], 
     "settings": {

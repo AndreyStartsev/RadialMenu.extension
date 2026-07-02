@@ -4333,12 +4333,20 @@ class RadialMenuWindow(Window):
                     key=lambda x: (0 if x.IsChecked else 1, x.Name.lower())
                 )
                 
+            # Temporarily disconnect ItemsSource to prevent WPF layout storm
+            if hasattr(self, "EditClassList") and self.EditClassList:
+                self.EditClassList.ItemsSource = None
+                
             # 3. Clear and re-populate _classes_collection
             if hasattr(self, "_classes_collection") and self._classes_collection:
                 self._classes_collection.Clear()
                 for c_item in self._all_classes_items:
                     self._classes_collection.Add(c_item)
                     
+            # Reconnect ItemsSource
+            if hasattr(self, "EditClassList") and self.EditClassList:
+                self.EditClassList.ItemsSource = self._classes_collection
+                
             # 4. Recalculate separators
             self.recalculate_class_separators()
         except Exception as ex:
