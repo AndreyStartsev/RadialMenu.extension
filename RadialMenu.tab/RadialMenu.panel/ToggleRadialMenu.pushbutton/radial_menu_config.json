@@ -151,11 +151,11 @@
             "name": "Pipe Placeholder (ID_PIPE_1LINE_PATH)", 
             "id": "ID_PIPE_1LINE_PATH", 
             "context_rules": {
-                "allowed_selection_states": [], 
                 "allowed_views": [
                     "3D", 
                     "Plan"
                 ], 
+                "allowed_selection_states": [], 
                 "allowed_classes": []
             }, 
             "type": "pyrevit", 
@@ -185,7 +185,7 @@
             "command": "submenu2"
         }, 
         {
-            "icon": "extracted_icons/ID_EDIT_CREATE_SIMILAR.png", 
+            "icon": "extracted_icons/ID_EDIT_CREATE_SIMILAR.dark.png", 
             "parent": null, 
             "level": 1, 
             "priority": 100, 

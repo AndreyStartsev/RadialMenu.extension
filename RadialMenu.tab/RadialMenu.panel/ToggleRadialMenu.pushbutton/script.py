@@ -5804,45 +5804,45 @@ class RadialMenuWindow(Window):
                         if not pyrevit_unique_id:
                             pyrevit_unique_id = item_id
                     
-                        # Helper to save Ribbon item icon on-the-fly
-                        def save_item_icon(r_item):
-                            if not r_item or not getattr(r_item, "Id", None):
-                                return ""
-                            r_id = r_item.Id
-                            safe_fn = "".join([c for c in r_id if c.isalnum() or c in ("_", "-")]).strip()
-                            if not safe_fn:
-                                return ""
-                                
-                            import os
-                            icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
-                            if not os.path.exists(icons_dir):
-                                try:
-                                    os.makedirs(icons_dir)
-                                except:
-                                    pass
-                                    
-                            global _IS_REVIT_DARK
-                            suffix = ".dark.png" if _IS_REVIT_DARK else ".png"
-                            file_path = os.path.join(icons_dir, safe_fn + suffix)
+                    # Helper to save Ribbon item icon on-the-fly
+                    def save_item_icon(r_item):
+                        if not r_item or not getattr(r_item, "Id", None):
+                            return ""
+                        r_id = r_item.Id
+                        safe_fn = "".join([c for c in r_id if c.isalnum() or c in ("_", "-")]).strip()
+                        if not safe_fn:
+                            return ""
                             
-                            if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
-                                img = None
-                                if hasattr(r_item, "LargeImage") and r_item.LargeImage:
-                                    img = r_item.LargeImage
-                                elif hasattr(r_item, "Image") and r_item.Image:
-                                    img = r_item.Image
-                                    
-                                if img:
-                                    try:
-                                        from System.Windows.Media.Imaging import PngBitmapEncoder, BitmapFrame
-                                        encoder = PngBitmapEncoder()
-                                        encoder.Frames.Add(BitmapFrame.Create(img))
-                                        with System.IO.FileStream(file_path, System.IO.FileMode.Create, System.IO.FileAccess.Write, getattr(System.IO.FileShare, "None")) as fs:
-                                            encoder.Save(fs)
-                                        log_debug(u"Extracted icon on drag for: {} (theme={})".format(r_id, suffix))
-                                    except Exception as e_save:
-                                        log_debug(u"Failed to extract icon on drag: {}".format(str(e_save)))
-                            return file_path if os.path.exists(file_path) else ""
+                        import os
+                        icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
+                        if not os.path.exists(icons_dir):
+                            try:
+                                os.makedirs(icons_dir)
+                            except:
+                                pass
+                                
+                        global _IS_REVIT_DARK
+                        suffix = ".dark.png" if _IS_REVIT_DARK else ".png"
+                        file_path = os.path.join(icons_dir, safe_fn + suffix)
+                        
+                        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+                            img = None
+                            if hasattr(r_item, "LargeImage") and r_item.LargeImage:
+                                img = r_item.LargeImage
+                            elif hasattr(r_item, "Image") and r_item.Image:
+                                img = r_item.Image
+                                
+                            if img:
+                                try:
+                                    from System.Windows.Media.Imaging import PngBitmapEncoder, BitmapFrame
+                                    encoder = PngBitmapEncoder()
+                                    encoder.Frames.Add(BitmapFrame.Create(img))
+                                    with System.IO.FileStream(file_path, System.IO.FileMode.Create, System.IO.FileAccess.Write, getattr(System.IO.FileShare, "None")) as fs:
+                                        encoder.Save(fs)
+                                    log_debug(u"Extracted icon on drag for: {} (theme={})".format(r_id, suffix))
+                                except Exception as e_save:
+                                    log_debug(u"Failed to extract icon on drag: {}".format(str(e_save)))
+                        return file_path if os.path.exists(file_path) else ""
 
                     is_pulldown = False
                     ctx_type_name = item.GetType().Name
