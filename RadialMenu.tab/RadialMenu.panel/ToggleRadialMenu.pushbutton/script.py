@@ -1568,7 +1568,7 @@ class ContextRulesDialog(Window):
             assembly = System.Reflection.Assembly.GetAssembly(db.Element)
             types = assembly.GetTypes()
             for t in types:
-                if t.IsClass and t.IsSubclassOf(db.Element) and t.Namespace == "Autodesk.Revit.DB":
+                if t.IsClass and t.IsSubclassOf(db.Element) and t.Namespace and t.Namespace.startswith("Autodesk.Revit.DB"):
                     reflected.append(t.Name)
         except Exception as ex:
             log_debug("Failed to reflect Revit classes: " + str(ex))
@@ -1735,7 +1735,7 @@ class RadialMenuWindow(Window):
                     ex_ref = sys.exc_info()[1]
                     types = getattr(ex_ref, "Types", None) or []
                 for t in types:
-                    if t and t.IsClass and t.IsSubclassOf(db.Element) and t.Namespace == "Autodesk.Revit.DB":
+                    if t and t.IsClass and t.IsSubclassOf(db.Element) and t.Namespace and t.Namespace.startswith("Autodesk.Revit.DB"):
                         reflected.append(t.Name)
             except Exception as ref_ex:
                 log_debug("Failed to reflect classes in __init__: " + safe_str(ref_ex))
@@ -2177,7 +2177,7 @@ class RadialMenuWindow(Window):
                                 if el:
                                     t = el.GetType()
                                     while t is not None and t != System.Object:
-                                        if t.Namespace == "Autodesk.Revit.DB":
+                                        if t.Namespace and t.Namespace.startswith("Autodesk.Revit.DB"):
                                             sel_classes.add(t.Name)
                                         t = t.BaseType
                                     if el.Category:
@@ -3480,7 +3480,7 @@ class RadialMenuWindow(Window):
                         ex_ref = sys.exc_info()[1]
                         types = getattr(ex_ref, "Types", None) or []
                     for t in types:
-                        if t and t.IsClass and t.IsSubclassOf(db.Element) and t.Namespace == "Autodesk.Revit.DB":
+                        if t and t.IsClass and t.IsSubclassOf(db.Element) and t.Namespace and t.Namespace.startswith("Autodesk.Revit.DB"):
                             reflected.append(t.Name)
                 except:
                     import sys
@@ -3530,7 +3530,7 @@ class RadialMenuWindow(Window):
                                     t = el.GetType()
                                     el_classes = []
                                     while t is not None and t != System.Object:
-                                        if t.Namespace == "Autodesk.Revit.DB":
+                                        if t.Namespace and t.Namespace.startswith("Autodesk.Revit.DB"):
                                             el_classes.append(t.Name)
                                         t = t.BaseType
                                     if el.Category:
@@ -4407,7 +4407,7 @@ class RadialMenuWindow(Window):
                     if el:
                         t = el.GetType()
                         while t is not None and t != System.Object:
-                            if t.Namespace == "Autodesk.Revit.DB":
+                            if t.Namespace and t.Namespace.startswith("Autodesk.Revit.DB"):
                                 selected_classes.append(t.Name)
                             t = t.BaseType
                         if el.Category:

@@ -19,10 +19,28 @@
             "command": "ID_RBS_PIPE_PIPE"
         }, 
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\icon.png", 
+            "icon": "C:\\Users\\vvirs\\OneDrive\\\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b\\SKREP\\RadialMenu.extension\\RadialMenu.tab\\RadialMenu.panel\\ToggleRadialMenu.pushbutton\\extracted_icons\\ID_PIPE_1LINE_PATH.png", 
             "parent": null, 
             "level": 1, 
             "priority": 20, 
+            "name": "Pipe Placeholder (ID_PIPE_1LINE_PATH)", 
+            "id": "ID_PIPE_1LINE_PATH", 
+            "context_rules": {
+                "allowed_views": [
+                    "3D", 
+                    "Plan"
+                ], 
+                "allowed_selection_states": [], 
+                "allowed_classes": []
+            }, 
+            "type": "pyrevit", 
+            "command": "ID_PIPE_1LINE_PATH"
+        }, 
+        {
+            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\icon.png", 
+            "parent": null, 
+            "level": 1, 
+            "priority": 30, 
             "name": "Smart\\nSelect", 
             "id": "exetnsion_sgtools_sgpyt_smartselect", 
             "is_active": true, 
@@ -44,7 +62,7 @@
             "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Category.pushbutton\\icon.png", 
             "parent": "exetnsion_sgtools_sgpyt_smartselect", 
             "level": 2, 
-            "priority": 20, 
+            "priority": 40, 
             "name": "Category", 
             "id": "exetnsion_sgtools_sgpyt_smartselect_category", 
             "context_rules": {
@@ -65,7 +83,7 @@
             "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Famaly.pushbutton\\icon.png", 
             "parent": "exetnsion_sgtools_sgpyt_smartselect", 
             "level": 2, 
-            "priority": 30, 
+            "priority": 50, 
             "name": "Famaly", 
             "id": "exetnsion_sgtools_sgpyt_smartselect_famaly", 
             "context_rules": {
@@ -86,7 +104,7 @@
             "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Host.pushbutton\\icon.png", 
             "parent": "exetnsion_sgtools_sgpyt_smartselect", 
             "level": 2, 
-            "priority": 10, 
+            "priority": 60, 
             "name": "Host", 
             "id": "exetnsion_sgtools_sgpyt_smartselect_host", 
             "context_rules": {
@@ -107,7 +125,7 @@
             "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Type.pushbutton\\icon.png", 
             "parent": "exetnsion_sgtools_sgpyt_smartselect", 
             "level": 2, 
-            "priority": 40, 
+            "priority": 70, 
             "name": "Type", 
             "id": "exetnsion_sgtools_sgpyt_smartselect_type", 
             "context_rules": {
@@ -128,7 +146,7 @@
             "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Autodem.pushbutton\\icon.png", 
             "parent": null, 
             "level": 1, 
-            "priority": 30, 
+            "priority": 80, 
             "name": "Dimension\\nSprinklers", 
             "id": "exetnsion_sgtools_sgpyt_autodem", 
             "context_rules": {
@@ -144,28 +162,10 @@
             "command": "exetnsion_sgtools_sgpyt_autodem"
         }, 
         {
-            "icon": "C:\\Users\\vvirs\\OneDrive\\\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b\\SKREP\\RadialMenu.extension\\RadialMenu.tab\\RadialMenu.panel\\ToggleRadialMenu.pushbutton\\extracted_icons\\ID_PIPE_1LINE_PATH.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 40, 
-            "name": "Pipe Placeholder (ID_PIPE_1LINE_PATH)", 
-            "id": "ID_PIPE_1LINE_PATH", 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan"
-                ], 
-                "allowed_selection_states": [], 
-                "allowed_classes": []
-            }, 
-            "type": "pyrevit", 
-            "command": "ID_PIPE_1LINE_PATH"
-        }, 
-        {
             "icon": "extracted_icons/ID_RBS_SPRINKLER.png", 
             "parent": null, 
             "level": 1, 
-            "priority": 50, 
+            "priority": 90, 
             "name": "New Submenu", 
             "id": "new_submenu", 
             "context_rules": {
@@ -188,7 +188,7 @@
             "icon": "G:\\My Drive\\Exetnsion.extension\\ASTools.tab\\Test.panel\\FlipSprinkler.pushbutton\\icon.png", 
             "parent": null, 
             "level": 1, 
-            "priority": 60, 
+            "priority": 100, 
             "name": "FlipSprinkler", 
             "id": "exetnsion_astools_test_flipsprinkler", 
             "context_rules": {
@@ -212,8 +212,8 @@
             "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Branch descinnect.pushbutton\\icon.png", 
             "parent": null, 
             "level": 1, 
-            "priority": 70, 
-            "name": "Disconnect\\nSprinkler", 
+            "priority": 110, 
+            "name": "Disconnect Sprinkler", 
             "id": "exetnsion_sgtools_sgpyt_branchdescinnect", 
             "context_rules": {
                 "allowed_views": [
@@ -236,8 +236,8 @@
             "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\testQS Plus.pushbutton\\icon.png", 
             "parent": null, 
             "level": 1, 
-            "priority": 80, 
-            "name": "Symmetric Dim\\nDistribute+", 
+            "priority": 120, 
+            "name": "Symmetric Dim", 
             "id": "exetnsion_sgtools_sgpyt_testqsplus", 
             "context_rules": {
                 "allowed_views": [
@@ -257,15 +257,29 @@
             "command": "exetnsion_sgtools_sgpyt_testqsplus"
         }, 
         {
-            "id": "exetnsion_sgtools_sgpyt_collapsefitting", 
-            "parent": null, 
-            "context_rules": {}, 
-            "level": 1, 
             "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\CollapseFitting.pushbutton\\icon.png", 
+            "parent": null, 
+            "level": 1, 
+            "priority": 130, 
+            "name": "Collapse Fitting", 
+            "id": "exetnsion_sgtools_sgpyt_collapsefitting", 
+            "context_rules": {
+                "allowed_views": [
+                    "3D", 
+                    "Plan", 
+                    "Sheet"
+                ], 
+                "allowed_selection_states": [
+                    "Pre-highlighted", 
+                    "Selection"
+                ], 
+                "allowed_classes": [
+                    "Pipe Fittings", 
+                    "Pipe Segments"
+                ]
+            }, 
             "type": "pyrevit", 
-            "name": "Collapse\\nFitting", 
-            "command": "exetnsion_sgtools_sgpyt_collapsefitting", 
-            "priority": 90
+            "command": "exetnsion_sgtools_sgpyt_collapsefitting"
         }
     ], 
     "settings": {
