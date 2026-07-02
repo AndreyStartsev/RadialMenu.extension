@@ -6099,7 +6099,8 @@ def get_english_names_for_category(category):
             -2000095: ["Railings"],
             -2000050: ["Areas", "Area"],
             -2000160: ["Rooms", "Room"],
-            -2008049: ["Zones", "Zone"],
+            -2008049: ["Pipe Fittings", "Pipe Fitting"],
+            -2000100: ["Zones", "Zone"],
             -2008100: ["Sprinklers", "Sprinkler"],
         }
         if bic_val in mapping:
@@ -6145,7 +6146,8 @@ def get_clean_english_category_name(category):
             -2000095: "Railings",
             -2000050: "Areas",
             -2000160: "Rooms",
-            -2008049: "Zones",
+            -2008049: "Pipe Fittings",
+            -2000100: "Zones",
             -2008100: "Sprinklers",
             -2008105: "Sprinkler Tags",
         }
