@@ -5957,40 +5957,19 @@ class RadialMenuWindow(Window):
             return
         self._is_closing = True
         
-        # Smart focus check to determine if focus should return to Revit
+        # Smart focus check: if an active window exists, we rely on WPF's native
+        # owner window activation when closing, rather than calling SetForegroundWindow (which can fail and cause focus jumps).
         try:
-            import os
-            revit_pid = os.getpid()
             active_hwnd = user32.GetForegroundWindow()
-            
-            active_pid = ctypes.c_uint32(0)
-            user32.GetWindowThreadProcessId(active_hwnd, ctypes.byref(active_pid))
-            active_pid_val = active_pid.value
-            
-            # If active_hwnd is 0/None, or is the desktop/shell window, we should restore focus to Revit.
-            # If they clicked another application's window, we do not steal focus.
-            if active_hwnd and active_hwnd != 0 and active_pid_val != revit_pid:
-                is_desktop = False
-                try:
-                    desktop_hwnd = user32.GetDesktopWindow()
-                    shell_hwnd = user32.GetShellWindow()
-                    if active_hwnd == desktop_hwnd or active_hwnd == shell_hwnd:
-                        is_desktop = True
-                except:
-                    pass
-                    
-                if not is_desktop:
-                    self._restore_revit_focus = False
-                    log_debug(u"Deactivated: user switched to another process (PID={}, HWND={}). Focus restore disabled.".format(active_pid_val, active_hwnd))
-                else:
-                    self._restore_revit_focus = True
-                    log_debug(u"Deactivated: user clicked desktop/shell. Focus restore enabled.")
-            else:
+            if not active_hwnd or active_hwnd == 0:
                 self._restore_revit_focus = True
-                log_debug(u"Deactivated: user clicked Revit window or no window active. Focus restore enabled.")
+                log_debug(u"Deactivated: no active window. Focus restore enabled.")
+            else:
+                self._restore_revit_focus = False
+                log_debug(u"Deactivated: active window exists. Relying on native OS focus reactivation.")
         except Exception as ex:
-            log_debug(u"Error in smart focus check on deactivation: {}".format(safe_str(ex)))
-            self._restore_revit_focus = True
+            log_debug(u"Error in focus check on deactivation: {}".format(safe_str(ex)))
+            self._restore_revit_focus = False
             
         log_debug(u"RadialMenuWindow deactivated (clicked outside). Closing.")
         
