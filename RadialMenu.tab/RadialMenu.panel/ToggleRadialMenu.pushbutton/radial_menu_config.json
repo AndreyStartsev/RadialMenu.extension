@@ -150,7 +150,14 @@
             "priority": 80, 
             "name": "Pipe Placeholder (ID_PIPE_1LINE_PATH)", 
             "id": "ID_PIPE_1LINE_PATH", 
-            "context_rules": {}, 
+            "context_rules": {
+                "allowed_selection_states": [], 
+                "allowed_views": [
+                    "3D", 
+                    "Plan"
+                ], 
+                "allowed_classes": []
+            }, 
             "type": "pyrevit", 
             "command": "ID_PIPE_1LINE_PATH"
         }, 

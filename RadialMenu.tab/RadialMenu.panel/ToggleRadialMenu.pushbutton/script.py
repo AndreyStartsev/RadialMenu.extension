@@ -499,7 +499,7 @@ def resolve_builtin_command(cmd_value):
             
     return cmd_value, safe_cmd
 
-def extract_icons_from_ribbon():
+def extract_icons_from_ribbon(force_overwrite=False):
     try:
         import os
         clr.AddReference("AdWindows")
@@ -521,8 +521,12 @@ def extract_icons_from_ribbon():
             safe_filename = "".join([c for c in item_id if c.isalnum() or c in ("_", "-")]).strip()
             if not safe_filename:
                 return
-            file_path = os.path.join(icons_dir, safe_filename + ".png")
-            if os.path.exists(file_path):
+                
+            global _IS_REVIT_DARK
+            suffix = ".dark.png" if _IS_REVIT_DARK else ".png"
+            file_path = os.path.join(icons_dir, safe_filename + suffix)
+            
+            if not force_overwrite and os.path.exists(file_path):
                 skipped_count[0] += 1
                 return
                 
@@ -1832,6 +1836,8 @@ class RadialMenuWindow(Window):
             # Customizer Panel buttons
             self.BtnExitCustomizer.Click += self.on_exit_customizer_clicked
             self.BtnExitCustomizerLook.Click += self.on_exit_customizer_clicked
+            if hasattr(self, "BtnExtractAllIcons") and self.BtnExtractAllIcons:
+                self.BtnExtractAllIcons.Click += self.on_extract_all_icons_clicked
             if hasattr(self, "BtnDeleteChecked") and self.BtnDeleteChecked:
                 self.BtnDeleteChecked.Click += self.on_delete_checked_clicked
 
@@ -3145,6 +3151,28 @@ class RadialMenuWindow(Window):
     def on_core_exit_clicked(self):
         """Exit settings mode - same as on_exit_customizer_clicked but called from core button."""
         self.on_exit_customizer_clicked(None, None)
+
+    def on_extract_all_icons_clicked(self, sender, args):
+        try:
+            from System.Windows import MessageBox, MessageBoxButton, MessageBoxImage
+            
+            msg = u"Extract all Revit Ribbon icons for the active theme?\nThis will take a few seconds."
+            if _IS_REVIT_DARK:
+                msg += u"\n\nActive theme: Dark (saving as *.dark.png)"
+            else:
+                msg += u"\n\nActive theme: Light (saving as *.png)"
+                
+            res = MessageBox.Show(msg, "Extract Icons", MessageBoxButton.OKCancel, MessageBoxImage.Information)
+            if res.ToString() == "OK":
+                from System.Windows.Input import Cursors, Mouse
+                Mouse.OverrideCursor = Cursors.Wait
+                try:
+                    extract_icons_from_ribbon(force_overwrite=True)
+                    MessageBox.Show("Icons extracted successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information)
+                finally:
+                    Mouse.OverrideCursor = None
+        except Exception as ex:
+            log_debug("Error in on_extract_all_icons_clicked: " + str(ex))
 
     def on_exit_customizer_clicked(self, sender, args):
         try:
@@ -5776,42 +5804,45 @@ class RadialMenuWindow(Window):
                         if not pyrevit_unique_id:
                             pyrevit_unique_id = item_id
                     
-                    # Helper to save Ribbon item icon on-the-fly
-                    def save_item_icon(r_item):
-                        if not r_item or not getattr(r_item, "Id", None):
-                            return ""
-                        r_id = r_item.Id
-                        safe_fn = "".join([c for c in r_id if c.isalnum() or c in ("_", "-")]).strip()
-                        if not safe_fn:
-                            return ""
-                            
-                        import os
-                        icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
-                        if not os.path.exists(icons_dir):
-                            try:
-                                os.makedirs(icons_dir)
-                            except:
-                                pass
-                        file_path = os.path.join(icons_dir, safe_fn + ".png")
-                        
-                        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
-                            img = None
-                            if hasattr(r_item, "LargeImage") and r_item.LargeImage:
-                                img = r_item.LargeImage
-                            elif hasattr(r_item, "Image") and r_item.Image:
-                                img = r_item.Image
+                        # Helper to save Ribbon item icon on-the-fly
+                        def save_item_icon(r_item):
+                            if not r_item or not getattr(r_item, "Id", None):
+                                return ""
+                            r_id = r_item.Id
+                            safe_fn = "".join([c for c in r_id if c.isalnum() or c in ("_", "-")]).strip()
+                            if not safe_fn:
+                                return ""
                                 
-                            if img:
+                            import os
+                            icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
+                            if not os.path.exists(icons_dir):
                                 try:
-                                    from System.Windows.Media.Imaging import PngBitmapEncoder, BitmapFrame
-                                    encoder = PngBitmapEncoder()
-                                    encoder.Frames.Add(BitmapFrame.Create(img))
-                                    with System.IO.FileStream(file_path, System.IO.FileMode.Create, System.IO.FileAccess.Write, getattr(System.IO.FileShare, "None")) as fs:
-                                        encoder.Save(fs)
-                                    log_debug(u"Extracted icon on drag for: {}".format(r_id))
-                                except Exception as e_save:
-                                    log_debug(u"Failed to extract icon on drag: {}".format(str(e_save)))
-                        return file_path if os.path.exists(file_path) else ""
+                                    os.makedirs(icons_dir)
+                                except:
+                                    pass
+                                    
+                            global _IS_REVIT_DARK
+                            suffix = ".dark.png" if _IS_REVIT_DARK else ".png"
+                            file_path = os.path.join(icons_dir, safe_fn + suffix)
+                            
+                            if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+                                img = None
+                                if hasattr(r_item, "LargeImage") and r_item.LargeImage:
+                                    img = r_item.LargeImage
+                                elif hasattr(r_item, "Image") and r_item.Image:
+                                    img = r_item.Image
+                                    
+                                if img:
+                                    try:
+                                        from System.Windows.Media.Imaging import PngBitmapEncoder, BitmapFrame
+                                        encoder = PngBitmapEncoder()
+                                        encoder.Frames.Add(BitmapFrame.Create(img))
+                                        with System.IO.FileStream(file_path, System.IO.FileMode.Create, System.IO.FileAccess.Write, getattr(System.IO.FileShare, "None")) as fs:
+                                            encoder.Save(fs)
+                                        log_debug(u"Extracted icon on drag for: {} (theme={})".format(r_id, suffix))
+                                    except Exception as e_save:
+                                        log_debug(u"Failed to extract icon on drag: {}".format(str(e_save)))
+                            return file_path if os.path.exists(file_path) else ""
 
                     is_pulldown = False
                     ctx_type_name = item.GetType().Name
