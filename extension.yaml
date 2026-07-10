@@ -1,0 +1,8 @@
+type: extension
+name: RadialMenu
+description: A highly customizable, context-aware Radial Menu for Autodesk Revit.
+author: Andrey Startsev
+author_profile: https://github.com/AndreyStartsev
+url: https://github.com/AndreyStartsev/RadialMenu.extension.git
+website: https://github.com/AndreyStartsev/RadialMenu.extension
+rocket_mode_compatible: true

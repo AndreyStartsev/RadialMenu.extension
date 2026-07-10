@@ -22,11 +22,15 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_SETTINGS = {
     "hold_delay_ms": 400,
+    "use_circles": False,
+    "animation_style": "fade",
+    "enable_logging": False,
     "gap_width": 3.0,
     "core_radius": 45,
     "petal_width": 60,
     "ring_gap": 5,
     "theme": "pyRevit Dark",
+    "color_scheme": "auto",
     "color_normal": "#F21E1E24",
     "color_hover_start": "#FF0083B0",
     "color_hover_end": "#FF004B66",

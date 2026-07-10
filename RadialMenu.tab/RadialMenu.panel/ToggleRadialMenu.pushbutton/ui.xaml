@@ -4,13 +4,23 @@
         Height="640" Width="640"
         WindowStyle="None"
         AllowsTransparency="True"
-        Background="Transparent"
+        Background="#01FFFFFF"
         Topmost="False"
         ShowInTaskbar="False"
-        WindowStartupLocation="Manual">
+        WindowStartupLocation="Manual"
+        AllowDrop="True">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <!-- Style to automatically bring the hovered submenu level canvas to the front of all levels -->
+        <Style x:Key="SubMenuCanvasStyle" TargetType="Canvas">
+            <Setter Property="Panel.ZIndex" Value="10"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Panel.ZIndex" Value="99"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <!-- Custom flat style for ComboBox to prevent white-on-white text issues -->
         <Style TargetType="ComboBoxItem">
             <Setter Property="Background" Value="Transparent"/>
@@ -398,8 +408,11 @@
         <!-- Left Pane: Radial Canvas (Column 0) -->
         <Canvas Grid.Column="0" Width="640" Height="640" HorizontalAlignment="Center" VerticalAlignment="Center">
             
-            <!-- Level 1 Template Buttons (1 to 10) -->
-            <Button Name="BtnL1_1" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
+            <!-- ================= MAIN MENU LEVEL 1 ================= -->
+            <Canvas Name="SubMenuLevel1" Style="{StaticResource SubMenuCanvasStyle}" Width="640" Height="640" Opacity="0" RenderTransformOrigin="0.5,0.5">
+
+                <!-- Level 1 Template Buttons (1 to 10) -->
+                <Button Name="BtnL1_1" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
                 <Canvas Width="640" Height="640">
                     <StackPanel Name="BtnL1_1Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
                         <Grid Width="24" Height="24" Margin="0,0,0,3" HorizontalAlignment="Center">
@@ -539,9 +552,10 @@
                     </StackPanel>
                 </Canvas>
             </Button>
+            </Canvas>
 
             <!-- ================= SUBMENU LEVEL 2 ================= -->
-            <Canvas Name="SubMenuLevel2" Width="640" Height="640" Visibility="Collapsed" Opacity="0">
+            <Canvas Name="SubMenuLevel2" Style="{StaticResource SubMenuCanvasStyle}" Width="640" Height="640" Visibility="Collapsed" Opacity="0" RenderTransformOrigin="0.5,0.5">
                 <Button Name="BtnL2_1" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
                     <Canvas Width="640" Height="640">
                         <StackPanel Name="BtnL2_1Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
@@ -685,7 +699,7 @@
             </Canvas>
 
             <!-- ================= SUBMENU LEVEL 3 ================= -->
-            <Canvas Name="SubMenuLevel3" Width="640" Height="640" Visibility="Collapsed" Opacity="0">
+            <Canvas Name="SubMenuLevel3" Style="{StaticResource SubMenuCanvasStyle}" Width="640" Height="640" Visibility="Collapsed" Opacity="0" RenderTransformOrigin="0.5,0.5">
                 <Button Name="BtnL3_1" Style="{StaticResource SectorButtonStyle}" Visibility="Collapsed">
                     <Canvas Width="640" Height="640">
                         <StackPanel Name="BtnL3_1Panel" Canvas.Left="0" Canvas.Top="0" Width="80" Height="70" VerticalAlignment="Center">
@@ -832,7 +846,8 @@
             <Border Name="CenterCoreBg" Width="90" Height="90" 
                     Canvas.Left="275" Canvas.Top="275" 
                     CornerRadius="45" 
-                    BorderThickness="1.5">
+                    BorderThickness="1.5"
+                    Panel.ZIndex="100">
                 <Border.Background>
                     <RadialGradientBrush Center="0.5,0.5" GradientOrigin="0.5,0.3">
                         <GradientStop Color="#FF303035" Offset="0"/>
@@ -851,7 +866,7 @@
             </Border>
 
             <!-- ================= CORE BUTTONS (NORMAL MODE) ================= -->
-            <Button Name="BtnCoreClose" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935">
+            <Button Name="BtnCoreClose" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935" Panel.ZIndex="100">
                 <Canvas Width="640" Height="640">
                     <StackPanel Name="BtnCoreClosePanel" Width="50" Height="40" VerticalAlignment="Center">
                         <TextBlock Text="✕" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
@@ -859,7 +874,7 @@
                     </StackPanel>
                 </Canvas>
             </Button>
-            <Button Name="BtnCoreSettings" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C">
+            <Button Name="BtnCoreSettings" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C" Panel.ZIndex="100">
                 <Canvas Width="640" Height="640">
                     <StackPanel Name="BtnCoreSettingsPanel" Width="50" Height="40" VerticalAlignment="Center">
                         <TextBlock Text="⚙" Foreground="White" FontSize="12" HorizontalAlignment="Center"/>
@@ -869,34 +884,53 @@
             </Button>
 
             <!-- ================= CORE BUTTONS (SETTINGS MODE) ================= -->
-            <Button Name="BtnCoreMove" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C" Visibility="Collapsed" ToolTip="Move Menu">
+            <Button Name="BtnCoreMove" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935" Visibility="Collapsed" ToolTip="Move Menu" Panel.ZIndex="100">
                 <Canvas Width="640" Height="640">
                     <StackPanel Name="BtnCoreMovePanel" Width="50" Height="40" VerticalAlignment="Center">
                         <TextBlock Text="✥" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Canvas>
             </Button>
-            <Button Name="BtnCorePool" Style="{StaticResource CoreButtonStyle}" Background="#FF4CAF50" Visibility="Collapsed" ToolTip="Command Pool">
+            <Button Name="BtnCorePool" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C" Visibility="Collapsed" ToolTip="Command Pool" Panel.ZIndex="100">
                 <Canvas Width="640" Height="640">
                     <StackPanel Name="BtnCorePoolPanel" Width="50" Height="40" VerticalAlignment="Center">
                         <TextBlock Text="📋" Foreground="White" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Canvas>
             </Button>
-            <Button Name="BtnCoreAppearance" Style="{StaticResource CoreButtonStyle}" Background="#FFFFC107" Visibility="Collapsed" ToolTip="Appearance &amp; Settings">
+            <Button Name="BtnCoreAppearance" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C" Visibility="Collapsed" ToolTip="Appearance &amp; Settings" Panel.ZIndex="100">
                 <Canvas Width="640" Height="640">
                     <StackPanel Name="BtnCoreAppearancePanel" Width="50" Height="40" VerticalAlignment="Center">
-                        <TextBlock Text="🎨" Foreground="Black" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <TextBlock Text="🎨" Foreground="White" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Canvas>
             </Button>
-            <Button Name="BtnCoreExit" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935" Visibility="Collapsed" ToolTip="Exit Settings">
+            <Button Name="BtnCoreExit" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935" Visibility="Collapsed" ToolTip="Exit Settings" Panel.ZIndex="100">
                 <Canvas Width="640" Height="640">
                     <StackPanel Name="BtnCoreExitPanel" Width="50" Height="40" VerticalAlignment="Center">
                         <TextBlock Text="✕" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Canvas>
             </Button>
+            <!-- Drag Preview Adorner (visible during drag-and-drop) -->
+            <Border Name="DragPreviewBorder" 
+                    Width="40" Height="40" 
+                    Background="#D92D2D30" 
+                    BorderBrush="#80FFFFFF" 
+                    BorderThickness="1.2" 
+                    CornerRadius="6" 
+                    IsHitTestVisible="False" 
+                    Visibility="Collapsed"
+                    Canvas.Left="0" Canvas.Top="0"
+                    Panel.ZIndex="999">
+                <Border.Effect>
+                    <DropShadowEffect Color="#000000" BlurRadius="10" ShadowDepth="2" Opacity="0.5"/>
+                </Border.Effect>
+                <Grid Margin="3">
+                    <Image Name="DragPreviewImage" Stretch="Uniform" Width="28" Height="28" Visibility="Collapsed"/>
+                    <TextBlock Name="DragPreviewEmoji" Text="" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
 
         </Canvas>
         
@@ -963,9 +997,7 @@
                                 <!-- Pool TreeView -->
                                 <TreeView Grid.Row="1" Name="PoolTreeView" Background="Transparent" BorderThickness="0"
                                           ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,0,4"
-                                          HorizontalContentAlignment="Stretch" AllowDrop="True"
-                                          VirtualizingStackPanel.IsVirtualizing="True"
-                                          VirtualizingStackPanel.VirtualizationMode="Recycling">
+                                          HorizontalContentAlignment="Stretch" AllowDrop="True">
                                     <TreeView.ItemContainerStyle>
                                         <Style TargetType="TreeViewItem">
                                             <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
@@ -1126,31 +1158,15 @@
                                 <Grid Grid.Row="2" Margin="0,4,0,4">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <Button Name="BtnAddFromPyRevit" Grid.Column="0" Content="＋ New" Height="24" Margin="0,0,3,0"
-                                            Background="#FF4CAF50" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="9">
-                                        <Button.Template>
-                                            <ControlTemplate TargetType="Button">
-                                                <Border CornerRadius="4" Background="{TemplateBinding Background}">
-                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </ControlTemplate>
-                                        </Button.Template>
-                                    </Button>
-                                    <Button Name="BtnAddSubmenuPool" Grid.Column="1" Content="＋ Submenu" Height="24" Margin="3,0,3,0"
-                                            Background="#FF9C27B0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="9">
-                                        <Button.Template>
-                                            <ControlTemplate TargetType="Button">
-                                                <Border CornerRadius="4" Background="{TemplateBinding Background}">
-                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </ControlTemplate>
-                                        </Button.Template>
-                                    </Button>
-                                    <Button Name="BtnAddEmptyPool" Grid.Column="2" Content="＋ Empty" Height="24" Margin="3,0,0,0"
-                                            Background="#FF78909C" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="9">
+                                    <ComboBox Name="ComboAddType" Grid.Column="0" Height="24" Margin="0,0,3,0" SelectedIndex="0" VerticalContentAlignment="Center">
+                                        <ComboBoxItem Content="Command"/>
+                                        <ComboBoxItem Content="Submenu"/>
+                                        <ComboBoxItem Content="Empty"/>
+                                    </ComboBox>
+                                    <Button Name="BtnAddPoolItem" Grid.Column="1" Content="＋" Width="30" Height="24" Margin="3,0,0,0"
+                                            Background="#FF4CAF50" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="12" FontWeight="Bold">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
                                                 <Border CornerRadius="4" Background="{TemplateBinding Background}">
@@ -1256,22 +1272,32 @@
                                                 </Button.Template>
                                             </Button>
                                         </Grid>
+                                    </StackPanel>
+                                    
+                                    <!-- Visibility Rules Section -->
+                                    <Grid Grid.Row="2" Name="VisibilityRulesSection">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
                                         
                                         <!-- View type checkboxes -->
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4">
                                             <CheckBox Name="EditChkView3D" Content="3D" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="0,0,12,0"/>
                                             <CheckBox Name="EditChkViewPlan" Content="Plans" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="0,0,12,0"/>
                                             <CheckBox Name="EditChkViewSheet" Content="Sheets" Foreground="{DynamicResource CustomizerText}" FontSize="10"/>
                                         </StackPanel>
                                         
                                         <!-- Selection context checkboxes -->
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,6">
                                             <CheckBox Name="EditChkPrehighlighted" Content="Pre-highlighted" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="0,0,12,0"/>
                                             <CheckBox Name="EditChkSelection" Content="Selection" Foreground="{DynamicResource CustomizerText}" FontSize="10"/>
                                         </StackPanel>
                                         
                                         <!-- Class/Category search -->
-                                        <Grid Margin="0,0,0,4">
+                                        <Grid Grid.Row="2" Margin="0,0,0,4">
                                             <TextBox Name="EditClassSearch" Height="20" FontSize="10" Padding="4,1"
                                                      Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" 
                                                      BorderBrush="{DynamicResource CustomizerSecText}" VerticalContentAlignment="Center"/>
@@ -1288,55 +1314,52 @@
                                                 </TextBlock.Style>
                                             </TextBlock>
                                         </Grid>
-                                    </StackPanel>
-                                    
-                                    <ListBox Grid.Row="2" Name="EditClassList" Style="{x:Null}" Background="Transparent" BorderThickness="0"
-                                             ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,2,0,6"
-                                             VirtualizingStackPanel.IsVirtualizing="True"
-                                             VirtualizingStackPanel.VirtualizationMode="Recycling"
-                                             VirtualizingStackPanel.IsVirtualizingWhenGrouping="True">
-                                        <ListBox.Template>
-                                            <ControlTemplate TargetType="ListBox">
-                                                <ScrollViewer Background="Transparent" Focusable="False">
-                                                    <ItemsPresenter />
-                                                </ScrollViewer>
-                                            </ControlTemplate>
-                                        </ListBox.Template>
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <StackPanel>
-                                                    <CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Click="on_class_checkbox_clicked" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="1" Style="{x:Null}"/>
-                                                    <Border Height="1" Background="#55888888" Margin="0,4,0,4" SnapsToDevicePixels="True"
-                                                            Visibility="{Binding ShowSeparator, Converter={StaticResource BoolToVis}}"/>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                        <ListBox.GroupStyle>
-                                            <GroupStyle>
-                                                <GroupStyle.ContainerStyle>
-                                                    <Style TargetType="GroupItem">
-                                                        <Setter Property="Template">
-                                                            <Setter.Value>
-                                                                <ControlTemplate TargetType="GroupItem">
-                                                                    <StackPanel>
-                                                                        <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" />
-                                                                        <ItemsPresenter Margin="10,0,0,0" />
-                                                                    </StackPanel>
-                                                                </ControlTemplate>
-                                                            </Setter.Value>
-                                                        </Setter>
-                                                    </Style>
-                                                </GroupStyle.ContainerStyle>
-                                                <GroupStyle.HeaderTemplate>
-                                                    <DataTemplate>
-                                                        <Border BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="0,0,0,1" Margin="0,4,0,2" Padding="0,2,0,4">
-                                                            <TextBlock Text="{Binding Name}" Foreground="{DynamicResource CustomizerSecText}" FontWeight="Bold" FontSize="10" />
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </GroupStyle.HeaderTemplate>
-                                            </GroupStyle>
-                                        </ListBox.GroupStyle>
-                                    </ListBox>
+                                        
+                                        <ListBox Grid.Row="3" Name="EditClassList" Style="{x:Null}" Background="Transparent" BorderThickness="0"
+                                                 ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,2,0,6">
+                                            <ListBox.Template>
+                                                <ControlTemplate TargetType="ListBox">
+                                                    <ScrollViewer Background="Transparent" Focusable="False">
+                                                        <ItemsPresenter />
+                                                    </ScrollViewer>
+                                                </ControlTemplate>
+                                            </ListBox.Template>
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel>
+                                                        <CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Click="on_class_checkbox_clicked" Foreground="{DynamicResource CustomizerText}" FontSize="10" Margin="1" Style="{x:Null}"/>
+                                                        <Border Height="1" Background="#55888888" Margin="0,4,0,4" SnapsToDevicePixels="True"
+                                                                Visibility="{Binding ShowSeparator, Converter={StaticResource BoolToVis}}"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                            <ListBox.GroupStyle>
+                                                <GroupStyle>
+                                                    <GroupStyle.ContainerStyle>
+                                                        <Style TargetType="GroupItem">
+                                                            <Setter Property="Template">
+                                                                <Setter.Value>
+                                                                    <ControlTemplate TargetType="GroupItem">
+                                                                        <StackPanel>
+                                                                            <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" />
+                                                                            <ItemsPresenter Margin="10,0,0,0" />
+                                                                        </StackPanel>
+                                                                    </ControlTemplate>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                        </Style>
+                                                    </GroupStyle.ContainerStyle>
+                                                    <GroupStyle.HeaderTemplate>
+                                                        <DataTemplate>
+                                                            <Border BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="0,0,0,1" Margin="0,4,0,2" Padding="0,2,0,4">
+                                                                <TextBlock Text="{Binding Name}" Foreground="{DynamicResource CustomizerSecText}" FontWeight="Bold" FontSize="10" />
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </GroupStyle.HeaderTemplate>
+                                                </GroupStyle>
+                                            </ListBox.GroupStyle>
+                                        </ListBox>
+                                    </Grid>
                                     
                                     <!-- Action buttons -->
                                     <Grid Grid.Row="3">
@@ -1344,7 +1367,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Button Name="BtnPoolItemSave" Grid.Column="0" Content="Save" Height="22" Margin="0,0,3,0"
+                                        <Button Name="BtnPoolItemSave" Grid.Column="0" Content="Apply" Height="22" Margin="0,0,3,0"
                                                 Background="#FF0083B0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
                                             <Button.Template>
                                                 <ControlTemplate TargetType="Button">
@@ -1391,6 +1414,54 @@
                                             <ComboBoxItem Content="Right Hold"/>
                                             <ComboBoxItem Content="Right Double Click"/>
                                         </ComboBox>
+                                    </Grid>
+
+                                    <!-- CheckBox: Use Circles -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Circle Petals:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <CheckBox Name="UseCirclesCheckBox" Grid.Column="1" Content="Draw petals as circles" Foreground="{DynamicResource CustomizerText}" FontSize="11" VerticalAlignment="Center"/>
+                                    </Grid>
+                                    
+                                    <!-- ComboBox: Animation Style -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Opening Style:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <ComboBox Name="AnimationStyleComboBox" Grid.Column="1" Height="24" FontSize="11" VerticalContentAlignment="Center" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}">
+                                            <ComboBoxItem Content="Fade In"/>
+                                            <ComboBoxItem Content="Pop Out"/>
+                                            <ComboBoxItem Content="Fan Out"/>
+                                        </ComboBox>
+                                    </Grid>
+
+                                    <!-- ComboBox: Color Scheme -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Color Scheme:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <ComboBox Name="ColorSchemeComboBox" Grid.Column="1" Height="24" FontSize="11" VerticalContentAlignment="Center" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}">
+                                            <ComboBoxItem Name="ColorSchemeDarkItem" Content="Dark"/>
+                                            <ComboBoxItem Name="ColorSchemeLightItem" Content="Light"/>
+                                            <ComboBoxItem Name="ColorSchemeAutoItem" Content="Auto (Revit Theme)"/>
+                                        </ComboBox>
+                                    </Grid>
+
+                                    <!-- CheckBox: Enable Logging -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Logging:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <CheckBox Name="EnableLoggingCheckBox" Grid.Column="1" Content="Enable debug logging" Foreground="{DynamicResource CustomizerText}" FontSize="11" VerticalAlignment="Center"/>
                                     </Grid>
 
                                     <!-- Slider: Hold Delay -->
@@ -1453,6 +1524,18 @@
                                         <TextBlock Name="SectorSpacingValueText" Grid.Column="2" Text="3.0 px" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
                                     </Grid>
                                     
+                                    <!-- Slider: Petal Opacity -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Petal Opacity:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <Slider Name="PetalOpacitySlider" Grid.Column="1" Minimum="10" Maximum="100" Value="95" IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center"/>
+                                        <TextBlock Name="PetalOpacityValueText" Grid.Column="2" Text="95%" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    
                                     <!-- Divider -->
                                     <Border BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="0,0,0,1" Margin="0,5,0,10"/>
                                     
@@ -1480,69 +1563,72 @@
                                         <TextBlock Name="L3MaxAngleValueText" Grid.Column="2" Text="90°" Foreground="{DynamicResource CustomizerHighlight}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right"/>
                                     </Grid>
                                     
-                                    <!-- Divider -->
-                                    <Border BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="0,0,0,1" Margin="0,5,0,10"/>
-                                    
-                                    <!-- Theme Presets Dropdown -->
-                                    <Grid Margin="0,0,0,10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="105"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Theme Preset:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
-                                        <ComboBox Name="ThemeComboBox" Grid.Column="1" Height="24" FontSize="11" VerticalContentAlignment="Center" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}">
-                                            <ComboBoxItem Content="Revit Theme (Auto)"/>
-                                            <ComboBoxItem Content="pyRevit Dark"/>
-                                            <ComboBoxItem Content="Neon Fusion"/>
-                                            <ComboBoxItem Content="Classic Blue"/>
-                                            <ComboBoxItem Content="Forest Green"/>
-                                            <ComboBoxItem Content="Cyberpunk"/>
-                                            <ComboBoxItem Content="Custom Theme"/>
-                                        </ComboBox>
-                                    </Grid>
-                                    
-                                    <!-- Custom Color Hex Inputs -->
-                                    <TextBlock Text="Custom Hex Colors (e.g. #AARRGGBB)" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" FontWeight="Bold" Margin="0,5,0,8"/>
-                                    
-                                    <!-- Normal Fill -->
-                                    <Grid Margin="0,0,0,6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="105"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Normal Fill:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
-                                        <TextBox Name="HexNormalText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
-                                    </Grid>
-                                    
-                                    <!-- Hover Start Fill -->
-                                    <Grid Margin="0,0,0,6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="105"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Hover Start:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
-                                        <TextBox Name="HexHoverStartText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
-                                    </Grid>
-                                    
-                                    <!-- Hover End Fill -->
-                                    <Grid Margin="0,0,0,6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="105"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Hover End:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
-                                        <TextBox Name="HexHoverEndText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
-                                    </Grid>
-                                    
-                                    <!-- Border Fill -->
-                                    <Grid Margin="0,0,0,6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="105"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Border:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
-                                        <TextBox Name="HexBorderText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
-                                    </Grid>
+                                    <!-- Hidden Color Settings -->
+                                    <StackPanel Visibility="Collapsed">
+                                        <!-- Divider -->
+                                        <Border BorderBrush="{DynamicResource CustomizerBorderBrush}" BorderThickness="0,0,0,1" Margin="0,5,0,10"/>
+                                        
+                                        <!-- Theme Presets Dropdown -->
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="105"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Theme Preset:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                            <ComboBox Name="ThemeComboBox" Grid.Column="1" Height="24" FontSize="11" VerticalContentAlignment="Center" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}">
+                                                <ComboBoxItem Content="Revit Theme (Auto)"/>
+                                                <ComboBoxItem Content="pyRevit Dark"/>
+                                                <ComboBoxItem Content="Neon Fusion"/>
+                                                <ComboBoxItem Content="Classic Blue"/>
+                                                <ComboBoxItem Content="Forest Green"/>
+                                                <ComboBoxItem Content="Cyberpunk"/>
+                                                <ComboBoxItem Content="Custom Theme"/>
+                                            </ComboBox>
+                                        </Grid>
+                                        
+                                        <!-- Custom Color Hex Inputs -->
+                                        <TextBlock Text="Custom Hex Colors (e.g. #AARRGGBB)" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" FontWeight="Bold" Margin="0,5,0,8"/>
+                                        
+                                        <!-- Normal Fill -->
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="105"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Normal Fill:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                            <TextBox Name="HexNormalText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
+                                        </Grid>
+                                        
+                                        <!-- Hover Start Fill -->
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="105"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Hover Start:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                            <TextBox Name="HexHoverStartText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
+                                        </Grid>
+                                        
+                                        <!-- Hover End Fill -->
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="105"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Hover End:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                            <TextBox Name="HexHoverEndText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
+                                        </Grid>
+                                        
+                                        <!-- Border Fill -->
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="105"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Border:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                            <TextBox Name="HexBorderText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
+                                        </Grid>
+                                    </StackPanel>
                                 </StackPanel>
                             </ScrollViewer>
                             
@@ -1607,9 +1693,7 @@
                             
                             <!-- Commands TreeView -->
                             <TreeView Name="CommandTreeView" Grid.Row="1" Background="Transparent" BorderThickness="0" 
-                                      ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,0,8"
-                                      VirtualizingStackPanel.IsVirtualizing="True"
-                                      VirtualizingStackPanel.VirtualizationMode="Recycling">
+                                      ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
                                 <TreeView.ItemContainerStyle>
                                     <Style TargetType="TreeViewItem">
                                         <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>

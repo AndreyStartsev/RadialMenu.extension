@@ -1,333 +1,694 @@
 {
     "command_pool": [
         {
-            "icon": "extracted_icons/ID_RBS_PIPE_PIPE.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 10, 
-            "name": "Pipe", 
-            "id": "ID_RBS_PIPE_PIPE", 
+            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\icon.png",
+            "parent": null,
+            "level": 1,
+            "priority": 10,
+            "name": "Smart\\nSelect",
+            "id": "exetnsion_sgtools_sgpyt_smartselect",
+            "is_active": true,
             "context_rules": {
                 "allowed_views": [
-                    "3D", 
-                    "Plan"
-                ], 
-                "allowed_selection_states": [], 
-                "allowed_classes": []
-            }, 
-            "type": "built_in", 
-            "command": "ID_RBS_PIPE_PIPE"
-        }, 
-        {
-            "icon": "C:\\Users\\vvirs\\OneDrive\\\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b\\SKREP\\RadialMenu.extension\\RadialMenu.tab\\RadialMenu.panel\\ToggleRadialMenu.pushbutton\\extracted_icons\\ID_PIPE_1LINE_PATH.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 20, 
-            "name": "Pipe Placeholder (ID_PIPE_1LINE_PATH)", 
-            "id": "ID_PIPE_1LINE_PATH", 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan"
-                ], 
-                "allowed_selection_states": [], 
-                "allowed_classes": []
-            }, 
-            "type": "pyrevit", 
-            "command": "ID_PIPE_1LINE_PATH"
-        }, 
-        {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\icon.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 30, 
-            "name": "Smart\\nSelect", 
-            "id": "exetnsion_sgtools_sgpyt_smartselect", 
-            "is_active": true, 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan", 
+                    "3D",
+                    "Plan",
                     "Sheet"
-                ], 
+                ],
                 "allowed_selection_states": [
                     "Selection"
-                ], 
+                ],
                 "allowed_classes": []
-            }, 
-            "type": "built_in", 
+            },
+            "type": "built_in",
             "command": "submenu1"
-        }, 
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Category.pushbutton\\icon.png", 
-            "parent": "exetnsion_sgtools_sgpyt_smartselect", 
-            "level": 2, 
-            "priority": 40, 
-            "name": "Category", 
-            "id": "exetnsion_sgtools_sgpyt_smartselect_category", 
+            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Category.pushbutton\\icon.png",
+            "parent": "exetnsion_sgtools_sgpyt_smartselect",
+            "level": 2,
+            "priority": 10,
+            "name": "Category",
+            "id": "exetnsion_sgtools_sgpyt_smartselect_category",
             "context_rules": {
                 "allowed_views": [
-                    "3D", 
-                    "Plan", 
+                    "3D",
+                    "Plan",
                     "Sheet"
-                ], 
+                ],
                 "allowed_selection_states": [
                     "Selection"
-                ], 
+                ],
                 "allowed_classes": []
-            }, 
-            "type": "pyrevit", 
+            },
+            "type": "pyrevit",
             "command": "exetnsion_sgtools_sgpyt_smartselect_category"
-        }, 
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Famaly.pushbutton\\icon.png", 
-            "parent": "exetnsion_sgtools_sgpyt_smartselect", 
-            "level": 2, 
-            "priority": 50, 
-            "name": "Famaly", 
-            "id": "exetnsion_sgtools_sgpyt_smartselect_famaly", 
+            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Famaly.pushbutton\\icon.png",
+            "parent": "exetnsion_sgtools_sgpyt_smartselect",
+            "level": 2,
+            "priority": 20,
+            "name": "Famaly",
+            "id": "exetnsion_sgtools_sgpyt_smartselect_famaly",
             "context_rules": {
                 "allowed_views": [
-                    "3D", 
-                    "Plan", 
+                    "3D",
+                    "Plan",
                     "Sheet"
-                ], 
+                ],
                 "allowed_selection_states": [
                     "Selection"
-                ], 
+                ],
                 "allowed_classes": []
-            }, 
-            "type": "pyrevit", 
+            },
+            "type": "pyrevit",
             "command": "exetnsion_sgtools_sgpyt_smartselect_famaly"
-        }, 
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Host.pushbutton\\icon.png", 
-            "parent": "exetnsion_sgtools_sgpyt_smartselect", 
-            "level": 2, 
-            "priority": 60, 
-            "name": "Host", 
-            "id": "exetnsion_sgtools_sgpyt_smartselect_host", 
+            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Host.pushbutton\\icon.png",
+            "parent": "exetnsion_sgtools_sgpyt_smartselect",
+            "level": 2,
+            "priority": 30,
+            "name": "Host",
+            "id": "exetnsion_sgtools_sgpyt_smartselect_host",
             "context_rules": {
                 "allowed_views": [
-                    "3D", 
-                    "Plan", 
+                    "3D",
+                    "Plan",
                     "Sheet"
-                ], 
+                ],
                 "allowed_selection_states": [
                     "Selection"
-                ], 
+                ],
                 "allowed_classes": []
-            }, 
-            "type": "pyrevit", 
+            },
+            "type": "pyrevit",
             "command": "exetnsion_sgtools_sgpyt_smartselect_host"
-        }, 
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Type.pushbutton\\icon.png", 
-            "parent": "exetnsion_sgtools_sgpyt_smartselect", 
-            "level": 2, 
-            "priority": 70, 
-            "name": "Type", 
-            "id": "exetnsion_sgtools_sgpyt_smartselect_type", 
+            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Type.pushbutton\\icon.png",
+            "parent": "exetnsion_sgtools_sgpyt_smartselect",
+            "level": 2,
+            "priority": 40,
+            "name": "Type",
+            "id": "exetnsion_sgtools_sgpyt_smartselect_type",
             "context_rules": {
                 "allowed_views": [
-                    "3D", 
-                    "Plan", 
+                    "3D",
+                    "Plan",
                     "Sheet"
-                ], 
+                ],
                 "allowed_selection_states": [
                     "Selection"
-                ], 
+                ],
                 "allowed_classes": []
-            }, 
-            "type": "pyrevit", 
+            },
+            "type": "pyrevit",
             "command": "exetnsion_sgtools_sgpyt_smartselect_type"
-        }, 
+        },
         {
-            "icon": "extracted_icons/ID_RBS_SPRINKLER.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 80, 
-            "name": "New Submenu", 
-            "id": "new_submenu", 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan"
-                ], 
-                "allowed_selection_states": [
-                    "Pre-highlighted", 
-                    "Selection"
-                ], 
-                "allowed_classes": [
-                    "Sprinklers"
-                ]
-            }, 
-            "type": "built_in", 
+            "icon": "extracted_icons/ID_RBS_SPRINKLER.png",
+            "parent": null,
+            "level": 1,
+            "priority": 20,
+            "name": "Sprinklers",
+            "id": "new_submenu",
+            "context_rules": {},
+            "type": "built_in",
             "command": "submenu2"
-        }, 
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Branch descinnect.pushbutton\\icon.png", 
-            "parent": "new_submenu", 
-            "level": 2, 
-            "priority": 90, 
-            "name": "Disconnect Sprinkler", 
-            "id": "exetnsion_sgtools_sgpyt_branchdescinnect", 
+            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Branch descinnect.pushbutton\\icon.png",
+            "parent": "new_submenu",
+            "level": 2,
+            "priority": 10,
+            "name": "Disconnect Sprinkler",
+            "id": "exetnsion_sgtools_sgpyt_branchdescinnect",
             "context_rules": {
                 "allowed_views": [
-                    "3D", 
-                    "Plan", 
+                    "3D",
+                    "Plan",
                     "Sheet"
-                ], 
+                ],
                 "allowed_selection_states": [
-                    "Pre-highlighted", 
+                    "Pre-highlighted",
                     "Selection"
-                ], 
+                ],
                 "allowed_classes": [
                     "Sprinklers"
                 ]
-            }, 
-            "type": "pyrevit", 
+            },
+            "is_active": true,
+            "type": "pyrevit",
             "command": "exetnsion_sgtools_sgpyt_branchdescinnect"
-        }, 
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\ASTools.tab\\Test.panel\\FlipSprinkler.pushbutton\\icon.png", 
-            "parent": "new_submenu", 
-            "level": 2, 
-            "priority": 100, 
-            "name": "FlipSprinkler", 
-            "id": "exetnsion_astools_test_flipsprinkler", 
+            "icon": "G:\\My Drive\\Exetnsion.extension\\ASTools.tab\\Test.panel\\FlipSprinkler.pushbutton\\icon.png",
+            "parent": "new_submenu",
+            "level": 2,
+            "priority": 20,
+            "name": "FlipSprinkler",
+            "id": "exetnsion_astools_test_flipsprinkler",
             "context_rules": {
                 "allowed_views": [
-                    "3D", 
-                    "Plan", 
+                    "3D",
+                    "Plan",
                     "Sheet"
-                ], 
+                ],
                 "allowed_selection_states": [
-                    "Pre-highlighted", 
+                    "Pre-highlighted",
                     "Selection"
-                ], 
+                ],
                 "allowed_classes": [
                     "Sprinklers"
                 ]
-            }, 
-            "type": "pyrevit", 
+            },
+            "type": "pyrevit",
             "command": "exetnsion_astools_test_flipsprinkler"
-        }, 
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Autodem.pushbutton\\icon.png", 
-            "parent": "new_submenu", 
-            "level": 2, 
-            "priority": 110, 
-            "name": "Dimension\\nSprinklers", 
-            "id": "exetnsion_sgtools_sgpyt_autodem", 
+            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Autodem.pushbutton\\icon.png",
+            "parent": "new_submenu",
+            "level": 2,
+            "priority": 30,
+            "name": "Dimension\\nSprinklers",
+            "id": "exetnsion_sgtools_sgpyt_autodem",
             "context_rules": {
                 "allowed_views": [
-                    "Plan"
-                ], 
-                "allowed_selection_states": [], 
+                    "3D",
+                    "Plan",
+                    "Sheet"
+                ],
+                "allowed_selection_states": [
+                    "Pre-highlighted",
+                    "Selection"
+                ],
                 "allowed_classes": [
                     "Sprinklers"
                 ]
-            }, 
-            "type": "pyrevit", 
+            },
+            "type": "pyrevit",
             "command": "exetnsion_sgtools_sgpyt_autodem"
-        }, 
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\testQS Plus.pushbutton\\icon.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 120, 
-            "name": "Symmetric Dim", 
-            "id": "exetnsion_sgtools_sgpyt_testqsplus", 
+            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\CollapseFitting.pushbutton\\icon.png",
+            "parent": null,
+            "level": 1,
+            "priority": 30,
+            "name": "Collapse Fitting",
+            "id": "exetnsion_sgtools_sgpyt_collapsefitting",
             "context_rules": {
                 "allowed_views": [
-                    "3D", 
-                    "Plan", 
+                    "3D",
+                    "Plan",
                     "Sheet"
-                ], 
+                ],
                 "allowed_selection_states": [
-                    "Pre-highlighted", 
+                    "Pre-highlighted",
                     "Selection"
-                ], 
+                ],
                 "allowed_classes": [
-                    "Dimension"
+                    "Pipe Fittings",
+                    "Pipe Segments",
+                    "Pipe"
                 ]
-            }, 
-            "type": "pyrevit", 
-            "command": "exetnsion_sgtools_sgpyt_testqsplus"
-        }, 
+            },
+            "type": "pyrevit",
+            "command": "exetnsion_sgtools_sgpyt_collapsefitting"
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\CollapseFitting.pushbutton\\icon.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 130, 
-            "name": "Collapse Fitting", 
-            "id": "exetnsion_sgtools_sgpyt_collapsefitting", 
+            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\PullFitting.pushbutton\\icon.png",
+            "parent": null,
+            "level": 1,
+            "priority": 40,
+            "name": "PullFitting",
+            "id": "exetnsion_sgtools_sgpyt_pullfitting",
             "context_rules": {
                 "allowed_views": [
-                    "3D", 
-                    "Plan", 
+                    "3D",
+                    "Plan",
                     "Sheet"
-                ], 
+                ],
                 "allowed_selection_states": [
-                    "Pre-highlighted", 
+                    "Pre-highlighted",
                     "Selection"
-                ], 
+                ],
                 "allowed_classes": [
-                    "Pipe Fittings", 
+                    "Pipe Fittings",
                     "Pipe Segments"
                 ]
-            }, 
-            "type": "pyrevit", 
-            "command": "exetnsion_sgtools_sgpyt_collapsefitting"
-        }, 
+            },
+            "type": "pyrevit",
+            "command": "exetnsion_sgtools_sgpyt_pullfitting"
+        },
         {
-            "icon": "extracted_icons/ID_SETTINGS_SNAPPING.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 140, 
-            "name": "Snaps", 
-            "id": "ID_SETTINGS_SNAPPING", 
-            "context_rules": {}, 
-            "type": "built_in", 
-            "command": "ID_SETTINGS_SNAPPING"
-        }, 
+            "icon": "extracted_icons/ID_RELOCATE_SHARED_COORDINATES.png",
+            "parent": "HID_PROJECT_POSITION_RibbonListButton",
+            "level": 2,
+            "priority": 10,
+            "name": "Relocate Project",
+            "id": "ID_RELOCATE_SHARED_COORDINATES",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_RELOCATE_SHARED_COORDINATES"
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\ASTools.tab\\Test.panel\\Sprinkler autotrace.pushbutton\\icon.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 150, 
-            "name": "Sprinkler autotrace", 
-            "id": "exetnsion_astools_test_sprinklerautotrace", 
-            "context_rules": {}, 
-            "type": "pyrevit", 
-            "command": "exetnsion_astools_test_sprinklerautotrace"
-        }, 
+            "icon": "extracted_icons/ID_ROTATE_SHARED_COORDINATES.png",
+            "parent": "HID_PROJECT_POSITION_RibbonListButton",
+            "level": 2,
+            "priority": 30,
+            "name": "Rotate True North",
+            "id": "ID_ROTATE_SHARED_COORDINATES",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_ROTATE_SHARED_COORDINATES"
+        },
         {
-            "id": "exetnsion_sgtools_sgpyt_connectvertical", 
-            "parent": null, 
-            "context_rules": {}, 
-            "level": 1, 
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\ConnectVertical.pushbutton\\icon.png", 
-            "type": "pyrevit", 
-            "name": "Connect\\nVertical", 
-            "command": "exetnsion_sgtools_sgpyt_connectvertical", 
-            "priority": 160
+            "icon": "extracted_icons/ID_ROTATE_PROJECT.png",
+            "parent": "HID_PROJECT_POSITION_RibbonListButton",
+            "level": 2,
+            "priority": 20,
+            "name": "Rotate Project North",
+            "id": "ID_ROTATE_PROJECT",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_ROTATE_PROJECT"
+        },
+        {
+            "icon": "extracted_icons/ID_MEASURE_LINE.png",
+            "parent": "Measure_Split_Button",
+            "level": 2,
+            "priority": 10,
+            "name": "Measure Between Two References",
+            "id": "ID_MEASURE_LINE",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_MEASURE_LINE"
+        },
+        {
+            "icon": "extracted_icons/ID_MEASURE_PICK_LINES.png",
+            "parent": "Measure_Split_Button",
+            "level": 2,
+            "priority": 20,
+            "name": "Measure Along an Element",
+            "id": "ID_MEASURE_PICK_LINES",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_MEASURE_PICK_LINES"
+        },
+        {
+            "icon": "extracted_icons/ID_RBS_MECHANICAL_SETTINGS.png",
+            "parent": "HID_RME_SETTINGS_RibbonListButton",
+            "level": 2,
+            "priority": 10,
+            "name": "Mechanical Settings",
+            "id": "ID_RBS_MECHANICAL_SETTINGS",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_RBS_MECHANICAL_SETTINGS"
+        },
+        {
+            "icon": "extracted_icons/ID_RBS_ELECTRICAL_SETTINGS.png",
+            "parent": "HID_RME_SETTINGS_RibbonListButton",
+            "level": 2,
+            "priority": 20,
+            "name": "Electrical Settings",
+            "id": "ID_RBS_ELECTRICAL_SETTINGS",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_RBS_ELECTRICAL_SETTINGS"
+        },
+        {
+            "icon": "extracted_icons/ID_MEP_FABRICATION_SETTINGS.png",
+            "parent": "HID_RME_SETTINGS_RibbonListButton",
+            "level": 2,
+            "priority": 30,
+            "name": "Fabrication Settings",
+            "id": "ID_MEP_FABRICATION_SETTINGS",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_MEP_FABRICATION_SETTINGS"
+        },
+        {
+            "icon": "extracted_icons/ID_RBS_ELECTRICAL_LOAD_CLASSIFICATION.png",
+            "parent": "HID_RME_SETTINGS_RibbonListButton",
+            "level": 2,
+            "priority": 40,
+            "name": "Load Classifications",
+            "id": "ID_RBS_ELECTRICAL_LOAD_CLASSIFICATION",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_RBS_ELECTRICAL_LOAD_CLASSIFICATION"
+        },
+        {
+            "icon": "extracted_icons/ID_RBS_ELECTRICAL_DEMAND_FACTOR.png",
+            "parent": "HID_RME_SETTINGS_RibbonListButton",
+            "level": 2,
+            "priority": 50,
+            "name": "Demand Factors",
+            "id": "ID_RBS_ELECTRICAL_DEMAND_FACTOR",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_RBS_ELECTRICAL_DEMAND_FACTOR"
+        },
+        {
+            "icon": "extracted_icons/ID_RBS_BUILDINGSPACE_TYPE_SETTINGS.png",
+            "parent": "HID_RME_SETTINGS_RibbonListButton",
+            "level": 2,
+            "priority": 60,
+            "name": "Building/Space Type Settings",
+            "id": "ID_RBS_BUILDINGSPACE_TYPE_SETTINGS",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_RBS_BUILDINGSPACE_TYPE_SETTINGS"
+        },
+        {
+            "icon": "extracted_icons/ID_MEP_ELECTRICAL_ANALYSIS_SETTINGS.png",
+            "parent": "HID_RME_SETTINGS_RibbonListButton",
+            "level": 2,
+            "priority": 70,
+            "name": "Electrical Analytical Load Type Settings",
+            "id": "ID_MEP_ELECTRICAL_ANALYSIS_SETTINGS",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_MEP_ELECTRICAL_ANALYSIS_SETTINGS"
+        },
+        {
+            "icon": "extracted_icons/ID_MEP_PNID_SETTINGS.png",
+            "parent": "HID_RME_SETTINGS_RibbonListButton",
+            "level": 2,
+            "priority": 80,
+            "name": "P&ID Settings",
+            "id": "ID_MEP_PNID_SETTINGS",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_MEP_PNID_SETTINGS"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_SGToolsSGPyTSprinklerzoneZoneON.png",
+            "parent": "CustomCtrl_%CustomCtrl_%SGTools%SGPyT%Sprinkler zone",
+            "level": 2,
+            "priority": 10,
+            "name": "Zone ON",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%SGTools%SGPyT%Sprinkler zone%Zone ON",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%SGTools%SGPyT%Sprinkler zone%Zone ON"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_SGToolsSGPyTSprinklerzoneZoneOFF.png",
+            "parent": "CustomCtrl_%CustomCtrl_%SGTools%SGPyT%Sprinkler zone",
+            "level": 2,
+            "priority": 30,
+            "name": "Zone OFF",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%SGTools%SGPyT%Sprinkler zone%Zone OFF",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%SGTools%SGPyT%Sprinkler zone%Zone OFF"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetSheetsCopyViews.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets",
+            "level": 2,
+            "priority": 10,
+            "name": "Copy Viewports (Legends) To Other Sheets",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Copy Views",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Copy Views"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetSheetsMoveViews.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets",
+            "level": 2,
+            "priority": 20,
+            "name": "Move Viewports (Model, Detail) To Other Sheets",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Move Views",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Move Views"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetSheetsPinAllViewports.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets",
+            "level": 2,
+            "priority": 30,
+            "name": "Pin All Viewports",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Pin All Viewports",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Pin All Viewports"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetSheetsReorderSelectedViewport.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets",
+            "level": 2,
+            "priority": 40,
+            "name": "Reorder Selected Viewport",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Reorder Selected Viewport",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Reorder Selected Viewport"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetSheetsCopySheetstoOpenDocuments.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets",
+            "level": 2,
+            "priority": 50,
+            "name": "Copy Sheets To Open Documents",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Copy Sheets to Open Documents",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Copy Sheets to Open Documents"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetSheetsBatchSheetMaker.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets",
+            "level": 2,
+            "priority": 60,
+            "name": "Batch Sheet Maker",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Batch Sheet Maker",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Batch Sheet Maker"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetSheetsSelectSheets.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets",
+            "level": 2,
+            "priority": 70,
+            "name": "Select Sheets",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Select Sheets",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Select Sheets"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetSheetsRenameSelectedSheets.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets",
+            "level": 2,
+            "priority": 80,
+            "name": "Rename Selected Sheets",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Rename Selected Sheets",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Rename Selected Sheets"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetSheetsListTitleBlocksonSheets.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets",
+            "level": 2,
+            "priority": 90,
+            "name": "List/Select TitleBlocks on Sheets",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%List TitleBlocks on Sheets",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%List TitleBlocks on Sheets"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetSheetsSetCropRegionToSelectedShape.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets",
+            "level": 2,
+            "priority": 100,
+            "name": "Set Crop Region To Selected Shape",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Set Crop Region To Selected Shape",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Sheets%Set Crop Region To Selected Shape"
+        },
+        {
+            "icon": "extracted_icons/ID_JOIN_ELEMENTS_EDITOR_RibbonListButton.png",
+            "parent": "CustomCtrl_%CustomCtrl_%SGTools%SGPyT%Sprinkler zone",
+            "level": 2,
+            "priority": 20,
+            "name": "Join",
+            "id": "ID_JOIN_ELEMENTS_EDITOR_RibbonListButton",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "submenu2"
+        },
+        {
+            "icon": "extracted_icons/ID_JOIN_ELEMENTS_EDITOR.png",
+            "parent": "ID_JOIN_ELEMENTS_EDITOR_RibbonListButton",
+            "level": 3,
+            "priority": 10,
+            "name": "Join Geometry",
+            "id": "ID_JOIN_ELEMENTS_EDITOR",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_JOIN_ELEMENTS_EDITOR"
+        },
+        {
+            "icon": "extracted_icons/ID_UNJOIN_ELEMENTS_EDITOR.png",
+            "parent": "ID_JOIN_ELEMENTS_EDITOR_RibbonListButton",
+            "level": 3,
+            "priority": 20,
+            "name": "Unjoin Geometry",
+            "id": "ID_UNJOIN_ELEMENTS_EDITOR",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_UNJOIN_ELEMENTS_EDITOR"
+        },
+        {
+            "icon": "extracted_icons/ID_SWITCH_JOIN_ORDER_EDITOR.png",
+            "parent": "ID_JOIN_ELEMENTS_EDITOR_RibbonListButton",
+            "level": 3,
+            "priority": 30,
+            "name": "Switch Join Order",
+            "id": "ID_SWITCH_JOIN_ORDER_EDITOR",
+            "context_rules": {},
+            "type": "built_in",
+            "command": "ID_SWITCH_JOIN_ORDER_EDITOR"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetRevisionCreateRevisedSheetSet.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision",
+            "level": 2,
+            "priority": 10,
+            "name": "Create Revised Sheet Set",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Create Revised Sheet Set",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Create Revised Sheet Set"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetRevisionCopyRevisionstoOpenDocuments.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision",
+            "level": 2,
+            "priority": 20,
+            "name": "Copy Revisions to Open Documents",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Copy Revisions to Open Documents",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Copy Revisions to Open Documents"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetRevisionGenerateRevisionReport.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision",
+            "level": 2,
+            "priority": 30,
+            "name": "Generate Revision Report",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Generate Revision Report",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Generate Revision Report"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetRevisionFindAllRevisedSheets.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision",
+            "level": 2,
+            "priority": 40,
+            "name": "Find All Revised Sheets",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Find All Revised Sheets",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Find All Revised Sheets"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetRevisionFindAllRevisionCloudsOnViews.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision",
+            "level": 2,
+            "priority": 50,
+            "name": "Find All Revision Clouds On Views",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Find All Revision Clouds On Views",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Find All Revision Clouds On Views"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetRevisionFindAllSheetsMissingRevisionNumber.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision",
+            "level": 2,
+            "priority": 60,
+            "name": "Find All Sheets Missing Revision Number",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Find All Sheets Missing Revision Number",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Find All Sheets Missing Revision Number"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetRevisionFindAllSheetsWithSelectedRevision.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision",
+            "level": 2,
+            "priority": 70,
+            "name": "Find All Sheets With Selected Revision",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Find All Sheets With Selected Revision",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Find All Sheets With Selected Revision"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetRevisionFindRevCloudedLegends.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision",
+            "level": 2,
+            "priority": 80,
+            "name": "Find Legends with Revision Clouds",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Find Rev Clouded Legends",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Find Rev Clouded Legends"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetRevisionSetRevisionOnSheets.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision",
+            "level": 2,
+            "priority": 90,
+            "name": "Set Revision On Sheets",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Set Revision On Sheets",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Set Revision On Sheets"
+        },
+        {
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_CustomCtrl_pyRevitDrawingsetRevisionRemoveRevisionFromSheets.png",
+            "parent": "CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision",
+            "level": 2,
+            "priority": 100,
+            "name": "Remove Revision From Sheets",
+            "id": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Remove Revision From Sheets",
+            "context_rules": {},
+            "type": "pyrevit",
+            "command": "CustomCtrl_%CustomCtrl_%CustomCtrl_%pyRevit%Drawing set%Revision%Remove Revision From Sheets"
         }
-    ], 
+    ],
     "settings": {
-        "gap_width": 2.0, 
-        "l2_max_angle": 35, 
-        "ring_gap": 3, 
-        "l3_max_angle": 30, 
-        "petal_width": 46, 
-        "theme": "pyRevit Dark", 
-        "trigger_mode": "hold", 
-        "color_hover_start": "#FF0083B0", 
-        "hold_delay_ms": 400, 
-        "color_hover_end": "#FF004B66", 
-        "color_normal": "#F21E1E24", 
-        "color_border": "#25FFFFFF", 
+        "l2_max_angle": 35,
+        "animation_style": "pop",
+        "ring_gap": 3,
+        "l3_max_angle": 30,
+        "petal_width": 46,
+        "gap_width": 2.0,
+        "petal_opacity": 75,
+        "theme": "pyRevit Dark",
+        "color_scheme": "auto",
+        "trigger_mode": "hold",
+        "hold_delay_ms": 400,
+        "enable_logging": true,
+        "color_hover_start": "#FF4A90E2",
+        "color_hover_end": "#FF1D3A56",
+        "use_circles": false,
+        "color_normal": "#F2F0F0F0",
+        "color_border": "#20000000",
         "core_radius": 38
     }
 }

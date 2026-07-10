@@ -8,3 +8,4 @@ __pycache__/
 *.dmp
 *.log
 RadialMenu.tab/RadialMenu.panel/ToggleRadialMenu.pushbutton/RadialMenu_debug.log
+RadialMenu.tab/RadialMenu.panel/ToggleRadialMenu.pushbutton/extracted_icons/

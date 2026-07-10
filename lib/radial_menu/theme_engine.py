@@ -47,6 +47,7 @@ THEMES = {
 # Default color-related settings
 DEFAULT_SETTINGS = {
     "theme": "pyRevit Dark",
+    "color_scheme": "auto",
     "color_normal": "#F21E1E24",
     "color_hover_start": "#FF0083B0",
     "color_hover_end": "#FF004B66",

@@ -15,9 +15,12 @@ except NameError:
     unicode = str
 
 _IS_REVIT_DARK = False
+_IS_MENU_DARK = False
 _active_close_delegates = []
 _active_open_delegates = []
 _delegate_lock = threading.Lock()
+_CACHED_REFLECTED_CLASSES = None
+_CACHED_CATEGORY_GROUPS = None
 
 # Reference required .NET assemblies
 clr.AddReference("WindowsBase")
@@ -101,6 +104,7 @@ COMMON_REVIT_CLASSES = {
 
 # Debug Logger Setup
 LOG_FILE = os.path.join(os.path.dirname(__file__), "RadialMenu_debug.log")
+_ENABLE_LOGGING = True
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "radial_menu_config.json")
 
 # Default command pool - flat list with context rules per command
@@ -192,6 +196,26 @@ def get_id_value(el_id):
         return None
 
 def log_debug(msg):
+    if not _ENABLE_LOGGING:
+        return
+    try:
+        # Limit log size to 2 MB (2 * 1024 * 1024 bytes)
+        MAX_LOG_SIZE = 2 * 1024 * 1024
+        if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > MAX_LOG_SIZE:
+            try:
+                backup = LOG_FILE + ".bak"
+                if os.path.exists(backup):
+                    os.remove(backup)
+                os.rename(LOG_FILE, backup)
+            except:
+                try:
+                    with open(LOG_FILE, "wb") as f:
+                        f.write(u"[Log truncated due to size limit]\n".encode("utf-8"))
+                except:
+                    pass
+    except:
+        pass
+        
     try:
         if isinstance(msg, str):
             msg = msg.decode("utf-8", "ignore")
@@ -207,18 +231,45 @@ def log_debug(msg):
 DEFAULT_SETTINGS = {
     "hold_delay_ms": 400,
     "trigger_mode": "hold",
+    "use_circles": False,
+    "animation_style": "fade",
+    "enable_logging": True,
     "gap_width": 3.0,
     "core_radius": 45,
     "petal_width": 60,
     "ring_gap": 5,
     "theme": "pyRevit Dark",
+    "color_scheme": "auto",
     "color_normal": "#F21E1E24",
     "color_hover_start": "#FF0083B0",
     "color_hover_end": "#FF004B66",
     "color_border": "#25FFFFFF",
     "l2_max_angle": 90,
-    "l3_max_angle": 90
+    "l3_max_angle": 90,
+    "petal_opacity": 95
 }
+
+def apply_opacity_to_hex_color(hex_color, opacity_percent):
+    try:
+        hex_color = hex_color.strip()
+        if hex_color.startswith("#"):
+            hex_color = hex_color[1:]
+            
+        if len(hex_color) == 6:
+            r, g, b = hex_color[0:2], hex_color[2:4], hex_color[4:6]
+        elif len(hex_color) == 8:
+            r, g, b = hex_color[2:4], hex_color[4:6], hex_color[6:8]
+        else:
+            return "#" + hex_color
+            
+        alpha_val = int(round((opacity_percent / 100.0) * 255.0))
+        alpha_val = max(0, min(255, alpha_val))
+        alpha_hex = "{:02X}".format(alpha_val)
+        
+        return "#" + alpha_hex + r + g + b
+    except:
+        return hex_color
+
 
 THEMES = {
     "pyRevit Dark": {
@@ -324,10 +375,10 @@ def get_revit_theme_colors():
 def resolve_themed_icon(icon_path):
     if not icon_path:
         return icon_path
-    global _IS_REVIT_DARK
+    global _IS_MENU_DARK
     base, ext = os.path.splitext(icon_path)
     if ext.lower() == ".png":
-        if _IS_REVIT_DARK:
+        if _IS_MENU_DARK:
             if not base.endswith(".dark"):
                 dark_path = base + ".dark" + ext
                 if os.path.exists(dark_path):
@@ -571,6 +622,54 @@ def extract_icons_from_ribbon(force_overwrite=False):
         log_debug("Error extracting ribbon icons: " + str(ex))
 
 
+_THEME_ICONS_CHECKED = {}
+
+def check_and_suggest_icon_extraction(window):
+    try:
+        from Autodesk.Revit.UI import UIThemeManager, UITheme
+        is_dark = False
+        try:
+            is_dark = (UIThemeManager.CurrentTheme == UITheme.Dark)
+        except:
+            pass
+        theme_key = "dark" if is_dark else "light"
+        
+        global _THEME_ICONS_CHECKED
+        if _THEME_ICONS_CHECKED.get(theme_key):
+            return
+            
+        _THEME_ICONS_CHECKED[theme_key] = True
+        
+        import os
+        icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
+        has_icons = False
+        if os.path.exists(icons_dir):
+            if is_dark:
+                theme_files = [f for f in os.listdir(icons_dir) if f.lower().endswith(".dark.png")]
+            else:
+                theme_files = [f for f in os.listdir(icons_dir) if f.lower().endswith(".png") and not f.lower().endswith(".dark.png")]
+            
+            if len(theme_files) >= 10:
+                has_icons = True
+                
+        if not has_icons:
+            from System.Windows import MessageBox, MessageBoxButton, MessageBoxImage
+            msg = u"Revit Ribbon icons for the active theme ({}) have not been extracted yet.\nExtract them now? (Required for customizer icons)".format(theme_key.upper())
+            res = MessageBox.Show(window, msg, "Extract Icons", MessageBoxButton.YesNo, MessageBoxImage.Question)
+            if res.ToString() == "Yes":
+                from System.Windows.Input import Cursors, Mouse
+                Mouse.OverrideCursor = Cursors.Wait
+                try:
+                    extract_icons_from_ribbon(force_overwrite=True)
+                    MessageBox.Show(window, "Icons extracted successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information)
+                except Exception as ex_ext:
+                    log_debug("Failed to extract icons: " + str(ex_ext))
+                finally:
+                    Mouse.OverrideCursor = None
+    except Exception as ex:
+        log_debug("Error checking or extracting icons: " + str(ex))
+
+
 def migrate_old_config(data):
     """Migrate old context-based config to new pool-based format."""
     try:
@@ -641,6 +740,7 @@ def migrate_old_config(data):
         return list(DEFAULT_POOL)
 
 def load_config():
+    global _ENABLE_LOGGING
     default_structure = {
         "settings": dict(DEFAULT_SETTINGS),
         "command_pool": list(DEFAULT_POOL)
@@ -712,13 +812,17 @@ def load_config():
                     if config_changed:
                         save_config(data)
                 
+                _ENABLE_LOGGING = data.get("settings", {}).get("enable_logging", False)
                 return data
     except Exception as ex:
         log_debug(u"Failed to load config: {}".format(safe_str(ex)))
+    _ENABLE_LOGGING = default_structure.get("settings", {}).get("enable_logging", False)
     return default_structure
 
 def save_config(config_data):
     try:
+        global _ENABLE_LOGGING
+        _ENABLE_LOGGING = config_data.get("settings", {}).get("enable_logging", False)
         content = json.dumps(config_data, indent=4)
         with open(CONFIG_FILE, "wb") as f:
             f.write(content.encode("utf-8"))
@@ -750,15 +854,41 @@ _menu_opened_by_hold = False
 _active_window = None
 _window_lock = threading.Lock()
 
+def get_persistence():
+    try:
+        import System
+        p = System.AppDomain.CurrentDomain.GetData("RevitRadialMenuPersistence")
+        if not p:
+            from System.Collections.Generic import Dictionary
+            p = Dictionary[str, object]()
+            System.AppDomain.CurrentDomain.SetData("RevitRadialMenuPersistence", p)
+        return p
+    except:
+        return None
+
 def get_active_window():
     global _active_window
     with _window_lock:
-        return _active_window
+        if _active_window is not None:
+            return _active_window
+    try:
+        p = get_persistence()
+        if p and p.ContainsKey("active_window"):
+            return p["active_window"]
+    except:
+        pass
+    return None
 
 def set_active_window(win):
     global _active_window
     with _window_lock:
         _active_window = win
+    try:
+        p = get_persistence()
+        if p:
+            p["active_window"] = win
+    except:
+        pass
 
 _ui_dispatcher = None
 _hold_delay_ms = 400
@@ -1084,14 +1214,7 @@ class TreeItem(object):
 
     @property
     def IconPath(self):
-        try:
-            if self._icon_path and isinstance(self._icon_path, (str, unicode)):
-                if not hasattr(self, "_cached_icon_source"):
-                    self._cached_icon_source = load_bitmap_image_themed(self._icon_path)
-                return self._cached_icon_source
-            return None
-        except:
-            return None
+        return self._icon_path
 
     @property
     def UniqueId(self):
@@ -1694,7 +1817,8 @@ class RadialMenuWindow(Window):
                     log_debug("UNHANDLED APPDOMAIN EXCEPTION: " + str(ex))
                 except:
                     pass
-            System.AppDomain.CurrentDomain.UnhandledException += global_unhandled_handler
+            self._global_unhandled_handler = System.UnhandledExceptionEventHandler(global_unhandled_handler)
+            System.AppDomain.CurrentDomain.UnhandledException += self._global_unhandled_handler
             
             def dispatcher_unhandled_handler(sender, args):
                 try:
@@ -1704,7 +1828,9 @@ class RadialMenuWindow(Window):
                     log_debug(traceback.format_exc())
                 except:
                     pass
-            self.Dispatcher.UnhandledException += dispatcher_unhandled_handler
+            from System.Windows.Threading import DispatcherUnhandledExceptionEventHandler
+            self._dispatcher_unhandled_handler = DispatcherUnhandledExceptionEventHandler(dispatcher_unhandled_handler)
+            self.Dispatcher.UnhandledException += self._dispatcher_unhandled_handler
             log_debug("Registered global and dispatcher unhandled exception hooks.")
         except Exception as hooks_ex:
             log_debug("Failed to register exception hooks: " + str(hooks_ex))
@@ -1718,56 +1844,10 @@ class RadialMenuWindow(Window):
         except Exception as theme_ex:
             log_debug(u"Failed to query Revit theme at startup: {}".format(safe_str(theme_ex)))
             
-        # Pre-load Revit classes and categories safely on the main thread
+        # Heavy reflection and category loading moved to lazy load (when customizer or rules editor is opened)
         self._preloaded_classes = []
         self._preloaded_category_groups = {}
-        try:
-            import Autodesk.Revit.DB as db
-            reflected = []
-            
-            # 1. Reflect assembly types
-            try:
-                assembly = System.Reflection.Assembly.GetAssembly(db.Element)
-                try:
-                    types = assembly.GetTypes()
-                except:
-                    import sys
-                    ex_ref = sys.exc_info()[1]
-                    types = getattr(ex_ref, "Types", None) or []
-                for t in types:
-                    if t and t.IsClass and t.IsSubclassOf(db.Element) and t.Namespace and t.Namespace.startswith("Autodesk.Revit.DB"):
-                        reflected.append(t.Name)
-            except Exception as ref_ex:
-                log_debug("Failed to reflect classes in __init__: " + safe_str(ref_ex))
-                reflected = ["Wall", "Floor", "Pipe", "Duct", "FamilyInstance", "Dimension"]
-                
-            # 2. Get categories from active document
-            try:
-                uiapp = HOST_APP.uiapp
-                if uiapp and uiapp.ActiveUIDocument:
-                    doc = uiapp.ActiveUIDocument.Document
-                    for cat in doc.Settings.Categories:
-                        if cat.Name:
-                            clean_eng = get_clean_english_category_name(cat)
-                            if clean_eng:
-                                reflected.append(clean_eng)
-                                try:
-                                    cat_type = cat.CategoryType
-                                    cat_type_str = str(cat_type)
-                                    if cat_type == db.CategoryType.Annotation or "Annotation" in cat_type_str:
-                                        self._preloaded_category_groups[clean_eng] = "Annotation Elements"
-                                    else:
-                                        self._preloaded_category_groups[clean_eng] = "Model Elements"
-                                except:
-                                    pass
-            except Exception as cat_ex:
-                log_debug("Failed to get categories in __init__: " + safe_str(cat_ex))
-                
-            self._preloaded_classes = sorted(list(set(reflected)))
-            log_debug("Preloaded {} classes and categories on the main thread successfully.".format(len(self._preloaded_classes)))
-        except Exception as main_ex:
-            log_debug("Exception during class/category preloading in __init__: " + safe_str(main_ex))
-            
+        
         self._is_closing = False
         self.customizer_mode = False
         self._is_light = False
@@ -1813,8 +1893,32 @@ class RadialMenuWindow(Window):
             log_debug(u"Loading XAML from: {}".format(xaml_path))
             wpf.LoadComponent(self, xaml_path)
             log_debug(u"wpf.LoadComponent completed.")
+            self.AllowDrop = True
+            
+            # Programmatically initialize RenderTransform and BitmapCache on Level canvases to bypass XAML parser limitations and optimize performance
+            from System.Windows.Media import TransformGroup, ScaleTransform, RotateTransform, BitmapCache
+            for canvas_name in ["SubMenuLevel1", "SubMenuLevel2", "SubMenuLevel3"]:
+                canvas = getattr(self, canvas_name, None)
+                if canvas:
+                    group = TransformGroup()
+                    scale = ScaleTransform(1.0, 1.0)
+                    rotate = RotateTransform(0.0)
+                    group.Children.Add(scale)
+                    group.Children.Add(rotate)
+                    canvas.RenderTransform = group
+                    try:
+                        canvas.CacheMode = BitmapCache()
+                        log_debug(u"Enabled BitmapCache for {}".format(canvas_name))
+                    except Exception as cache_ex:
+                        log_debug(u"Failed to set CacheMode: {}".format(safe_str(cache_ex)))
+                    log_debug(u"Initialized RenderTransform group for {}".format(canvas_name))
         except Exception as ex:
-            log_debug(u"Exception in wpf.LoadComponent: {}".format(safe_str(ex)))
+            try:
+                import traceback
+                tb = traceback.format_exc()
+                log_debug(u"Exception in wpf.LoadComponent: {}\nTraceback:\n{}".format(safe_str(ex), tb))
+            except:
+                log_debug(u"Exception in wpf.LoadComponent: {}".format(safe_str(ex)))
             raise
             
         try:
@@ -1873,6 +1977,7 @@ class RadialMenuWindow(Window):
             self.Deactivated += self.on_deactivated
             self.KeyDown += self.on_key_down
             self.Closing += self.on_window_closing
+            self.Loaded += self.on_window_loaded
             
             # Load layout configuration
             self.load_layout_configuration()
@@ -1887,6 +1992,13 @@ class RadialMenuWindow(Window):
                     btn.AllowDrop = True
                     btn.DragOver += self.on_button_drag_over
                     btn.Drop += self.on_button_drop
+            self.cache_revit_context()
+            
+            # Check icons for the current theme asynchronously after window loads
+            def check_icons_async():
+                check_and_suggest_icon_extraction(self)
+            from System import Action
+            self.Dispatcher.BeginInvoke(Action(check_icons_async))
         except Exception as ex:
             log_debug(u"Exception connecting Click events: {}".format(safe_str(ex)))
             raise
@@ -1896,12 +2008,18 @@ class RadialMenuWindow(Window):
             pool_item = getattr(self, "_button_to_pool_item", {}).get(sender.Name)
             if pool_item:
                 cmd_value = pool_item.get("command")
-                if cmd_value == "submenu1":
-                    self._active_l1_parent = pool_item.get("id")
-                    self._active_l2_parent = None
-                    self.load_layout_configuration()
-                    self.update_radial_geometry()
-                    self.show_level2()
+                if cmd_value in ["submenu1", "submenu2"]:
+                    old_parent = self._active_l1_parent
+                    new_parent = pool_item.get("id")
+                    
+                    if old_parent != new_parent:
+                        self._active_l1_parent = new_parent
+                        self._active_l2_parent = None
+                        self.load_layout_configuration()
+                        self.update_radial_geometry()
+                        self.animate_level("SubMenuLevel2", True)
+                    else:
+                        self.show_level2()
                 else:
                     self.hide_level2()
             else:
@@ -1914,11 +2032,17 @@ class RadialMenuWindow(Window):
             pool_item = getattr(self, "_button_to_pool_item", {}).get(sender.Name)
             if pool_item:
                 cmd_value = pool_item.get("command")
-                if cmd_value == "submenu2":
-                    self._active_l2_parent = pool_item.get("id")
-                    self.load_layout_configuration()
-                    self.update_radial_geometry()
-                    self.show_level3()
+                if cmd_value in ["submenu1", "submenu2"]:
+                    old_parent = self._active_l2_parent
+                    new_parent = pool_item.get("id")
+                    
+                    if old_parent != new_parent:
+                        self._active_l2_parent = new_parent
+                        self.load_layout_configuration()
+                        self.update_radial_geometry()
+                        self.animate_level("SubMenuLevel3", True)
+                    else:
+                        self.show_level3()
                 else:
                     self.hide_level3()
             else:
@@ -1946,15 +2070,104 @@ class RadialMenuWindow(Window):
         except Exception as ex:
             log_debug(u"Error toggling level3: {}".format(safe_str(ex)))
 
+    def animate_level(self, canvas_name, is_show):
+        try:
+            settings = self._config_data.get("settings", dict(DEFAULT_SETTINGS))
+            style = settings.get("animation_style", "fade")
+            
+            canvas = getattr(self, canvas_name, None)
+            if not canvas:
+                return
+                
+            scale = None
+            rotate = None
+            if canvas.RenderTransform and hasattr(canvas.RenderTransform, "Children"):
+                children = canvas.RenderTransform.Children
+                if children.Count >= 2:
+                    scale = children[0]
+                    rotate = children[1]
+            
+            from System.Windows.Media.Animation import DoubleAnimation, CubicEase, EasingMode
+            from System import TimeSpan
+            from System.Windows import Visibility
+            from System.Windows.Media import ScaleTransform, RotateTransform
+            
+            # Setup easing functions for professional look and feel
+            ease_out = CubicEase()
+            ease_out.EasingMode = EasingMode.EaseOut
+            
+            ease_in = CubicEase()
+            ease_in.EasingMode = EasingMode.EaseIn
+            
+            if is_show:
+                canvas.Visibility = Visibility.Visible
+                
+                # Opacity animation (always fade in)
+                da_opacity = DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(200))
+                da_opacity.EasingFunction = ease_out
+                canvas.BeginAnimation(System.Windows.UIElement.OpacityProperty, da_opacity)
+                
+                if style == "pop":
+                    # Scale from 0 to 1
+                    if scale:
+                        da_scale = DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(200))
+                        da_scale.EasingFunction = ease_out
+                        scale.BeginAnimation(ScaleTransform.ScaleXProperty, da_scale)
+                        scale.BeginAnimation(ScaleTransform.ScaleYProperty, da_scale)
+                elif style == "fan":
+                    # Fan/Rotate from -45 to 0 while scaling slightly
+                    if rotate:
+                        da_rotate = DoubleAnimation(-45.0, 0.0, TimeSpan.FromMilliseconds(200))
+                        da_rotate.EasingFunction = ease_out
+                        rotate.BeginAnimation(RotateTransform.AngleProperty, da_rotate)
+                    if scale:
+                        da_scale = DoubleAnimation(0.6, 1.0, TimeSpan.FromMilliseconds(200))
+                        da_scale.EasingFunction = ease_out
+                        scale.BeginAnimation(ScaleTransform.ScaleXProperty, da_scale)
+                        scale.BeginAnimation(ScaleTransform.ScaleYProperty, da_scale)
+                else:
+                    # Reset transforms to default (fade style)
+                    if scale:
+                        scale.BeginAnimation(ScaleTransform.ScaleXProperty, None)
+                        scale.BeginAnimation(ScaleTransform.ScaleYProperty, None)
+                        scale.ScaleX = 1.0
+                        scale.ScaleY = 1.0
+                    if rotate:
+                        rotate.BeginAnimation(RotateTransform.AngleProperty, None)
+                        rotate.Angle = 0.0
+            else:
+                # Hide animation
+                da_opacity = DoubleAnimation(canvas.Opacity, 0.0, TimeSpan.FromMilliseconds(150))
+                da_opacity.EasingFunction = ease_in
+                def on_completed(s, e):
+                    canvas.Visibility = Visibility.Collapsed
+                da_opacity.Completed += on_completed
+                canvas.BeginAnimation(System.Windows.UIElement.OpacityProperty, da_opacity)
+                
+                if style == "pop":
+                    if scale:
+                        da_scale = DoubleAnimation(scale.ScaleX, 0.0, TimeSpan.FromMilliseconds(150))
+                        da_scale.EasingFunction = ease_in
+                        scale.BeginAnimation(ScaleTransform.ScaleXProperty, da_scale)
+                        scale.BeginAnimation(ScaleTransform.ScaleYProperty, da_scale)
+                elif style == "fan":
+                    if rotate:
+                        da_rotate = DoubleAnimation(rotate.Angle, -45.0, TimeSpan.FromMilliseconds(150))
+                        da_rotate.EasingFunction = ease_in
+                        rotate.BeginAnimation(RotateTransform.AngleProperty, da_rotate)
+                    if scale:
+                        da_scale = DoubleAnimation(scale.ScaleX, 0.6, TimeSpan.FromMilliseconds(150))
+                        da_scale.EasingFunction = ease_in
+                        scale.BeginAnimation(ScaleTransform.ScaleXProperty, da_scale)
+                        scale.BeginAnimation(ScaleTransform.ScaleYProperty, da_scale)
+        except Exception as ex:
+            log_debug("Error in animate_level: " + str(ex))
+
     def show_level2(self):
         try:
             from System.Windows import Visibility
             if self.SubMenuLevel2.Visibility != Visibility.Visible:
-                self.SubMenuLevel2.Visibility = Visibility.Visible
-                from System.Windows.Media.Animation import DoubleAnimation
-                from System import TimeSpan
-                da = DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(200))
-                self.SubMenuLevel2.BeginAnimation(System.Windows.UIElement.OpacityProperty, da)
+                self.animate_level("SubMenuLevel2", True)
         except Exception as ex:
             log_debug(u"Error showing level2: {}".format(safe_str(ex)))
 
@@ -1965,13 +2178,7 @@ class RadialMenuWindow(Window):
             from System.Windows import Visibility
             if self.SubMenuLevel2.Visibility == Visibility.Visible:
                 self.hide_level3()
-                from System.Windows.Media.Animation import DoubleAnimation
-                from System import TimeSpan
-                da = DoubleAnimation(self.SubMenuLevel2.Opacity, 0.0, TimeSpan.FromMilliseconds(150))
-                def on_completed(s, e):
-                    self.SubMenuLevel2.Visibility = Visibility.Collapsed
-                da.Completed += on_completed
-                self.SubMenuLevel2.BeginAnimation(System.Windows.UIElement.OpacityProperty, da)
+                self.animate_level("SubMenuLevel2", False)
         except Exception as ex:
             log_debug(u"Error hiding level2: {}".format(safe_str(ex)))
 
@@ -1979,11 +2186,7 @@ class RadialMenuWindow(Window):
         try:
             from System.Windows import Visibility
             if self.SubMenuLevel3.Visibility != Visibility.Visible:
-                self.SubMenuLevel3.Visibility = Visibility.Visible
-                from System.Windows.Media.Animation import DoubleAnimation
-                from System import TimeSpan
-                da = DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(200))
-                self.SubMenuLevel3.BeginAnimation(System.Windows.UIElement.OpacityProperty, da)
+                self.animate_level("SubMenuLevel3", True)
         except Exception as ex:
             log_debug(u"Error showing level3: {}".format(safe_str(ex)))
 
@@ -1992,13 +2195,7 @@ class RadialMenuWindow(Window):
             self._active_l2_parent = None
             from System.Windows import Visibility
             if self.SubMenuLevel3.Visibility == Visibility.Visible:
-                from System.Windows.Media.Animation import DoubleAnimation
-                from System import TimeSpan
-                da = DoubleAnimation(self.SubMenuLevel3.Opacity, 0.0, TimeSpan.FromMilliseconds(150))
-                def on_completed(s, e):
-                    self.SubMenuLevel3.Visibility = Visibility.Collapsed
-                da.Completed += on_completed
-                self.SubMenuLevel3.BeginAnimation(System.Windows.UIElement.OpacityProperty, da)
+                self.animate_level("SubMenuLevel3", False)
         except Exception as ex:
             log_debug(u"Error hiding level3: {}".format(safe_str(ex)))
 
@@ -2007,11 +2204,8 @@ class RadialMenuWindow(Window):
             self._config_data = load_config()
             pool = self._config_data.get("command_pool", list(DEFAULT_POOL))
             
-            # Apply context filtering only when NOT in customizer mode
-            if not self.customizer_mode:
-                filtered_pool = self.filter_pool_by_context(pool)
-            else:
-                filtered_pool = [p for p in pool if p.get("is_active", True)]
+            # Apply context filtering (always, including in customizer mode to maintain layout context)
+            filtered_pool = self.filter_pool_by_context(pool)
             
             self._command_pool = pool  # Full pool for settings editing
             self._filtered_pool = filtered_pool  # Context-filtered for display
@@ -2081,62 +2275,73 @@ class RadialMenuWindow(Window):
             log_debug(u"Failed to load layout configuration: {}".format(safe_str(ex)))
             self._level_counts = (0, 0, 0)
 
+    def cache_revit_context(self):
+        try:
+            # 1. Cache View Category
+            view_cat = "Plan"
+            uiapp = HOST_APP.uiapp
+            if uiapp and uiapp.ActiveUIDocument:
+                active_view = uiapp.ActiveUIDocument.ActiveView
+                if active_view:
+                    from Autodesk.Revit.DB import ViewType
+                    vt = active_view.ViewType
+                    if vt in [ViewType.ThreeD]:
+                        view_cat = "3D"
+                    elif vt in [ViewType.FloorPlan, ViewType.CeilingPlan, ViewType.AreaPlan, ViewType.EngineeringPlan, ViewType.Elevation, ViewType.Section]:
+                        view_cat = "Plan"
+                    elif vt in [ViewType.DrawingSheet]:
+                        view_cat = "Sheet"
+            self._cached_view_category = view_cat
+        except Exception as ex:
+            log_debug("Error caching view category: " + str(ex))
+            self._cached_view_category = "Plan"
+
+        try:
+            # 2. Cache Selection State and Classes
+            if getattr(self, "customizer_mode", False):
+                ctx = self.active_context
+                if ctx == "default":
+                    self._cached_selection_state = "None"
+                    self._cached_sel_classes = set()
+                else:
+                    self._cached_selection_state = "Selection"
+                    if ctx == "pipes":
+                        self._cached_sel_classes = {"Pipes", "Pipe"}
+                    elif ctx == "ducts":
+                        self._cached_sel_classes = {"Ducts", "Duct"}
+                    elif ctx == "walls":
+                        self._cached_sel_classes = {"Walls", "Wall"}
+                    elif ctx == "dimensions":
+                        self._cached_sel_classes = {"Dimensions", "Dimension"}
+                    else:
+                        self._cached_sel_classes = set()
+            else:
+                self._cached_selection_state = get_current_selection_state()
+                self._cached_sel_classes = getattr(self, "_current_revit_sel_classes", set())
+        except Exception as ex:
+            log_debug("Error caching selection context: " + str(ex))
+            self._cached_selection_state = "None"
+            self._cached_sel_classes = set()
+
     def is_item_matching_context(self, item):
         try:
             rules = item.get("context_rules", {})
             if not rules:
                 return True
                 
-            # Get current view category
-            current_view_category = "Plan"
-            try:
-                uiapp = HOST_APP.uiapp
-                if uiapp and uiapp.ActiveUIDocument:
-                    active_view = uiapp.ActiveUIDocument.ActiveView
-                    if active_view:
-                        from Autodesk.Revit.DB import ViewType
-                        vt = active_view.ViewType
-                        if vt in [ViewType.ThreeD]:
-                            current_view_category = "3D"
-                        elif vt in [ViewType.FloorPlan, ViewType.CeilingPlan, ViewType.AreaPlan, ViewType.EngineeringPlan, ViewType.Elevation, ViewType.Section]:
-                            current_view_category = "Plan"
-                        elif vt in [ViewType.DrawingSheet]:
-                            current_view_category = "Sheet"
-            except:
-                pass
-                
-            # A. Check allowed_views
+            # A. Check allowed_views using cached category
+            current_view_category = getattr(self, "_cached_view_category", "Plan")
             if "allowed_views" in rules:
                 allowed_views = rules["allowed_views"]
                 if allowed_views:
                     if current_view_category not in allowed_views:
                         return False
             
-            # Determine selection state and classes
-            if getattr(self, "customizer_mode", False):
-                ctx = self.active_context
-                if ctx == "default":
-                    current_state = "None"
-                    sel_classes = set()
-                else:
-                    current_state = "Selection"
-                    if ctx == "pipes":
-                        sel_classes = {"Pipes", "Pipe"}
-                    elif ctx == "ducts":
-                        sel_classes = {"Ducts", "Duct"}
-                    elif ctx == "walls":
-                        sel_classes = {"Walls", "Wall"}
-                    elif ctx == "dimensions":
-                        sel_classes = {"Dimensions", "Dimension"}
-                    else:
-                        sel_classes = set()
-            else:
-                current_state = get_current_selection_state()
-                sel_classes = getattr(self, "_current_revit_sel_classes", set())
-                
-            # B. Check allowed_selection_states and allowed_classes
+            # B. Check allowed_selection_states and allowed_classes using cached values
             allowed_states = rules.get("allowed_selection_states", []) or []
+            current_state = getattr(self, "_cached_selection_state", "None")
             allowed_classes = rules.get("allowed_classes", []) or []
+            sel_classes = getattr(self, "_cached_sel_classes", set())
             
             if allowed_states or allowed_classes:
                 effective_states = allowed_states if allowed_states else ["Selection", "Pre-highlighted"]
@@ -2197,13 +2402,60 @@ class RadialMenuWindow(Window):
                 log_debug("Error gathering selection classes for filtering: " + str(ex))
                 
             self._current_revit_sel_classes = sel_classes
+            self.cache_revit_context()
+            
+            def process_node(node):
+                if not node.get("is_active", True):
+                    return False, None, []
+                
+                is_sub = node.get("command") in ["submenu1", "submenu2"]
+                if not is_sub:
+                    if self.is_item_matching_context(node):
+                        return True, dict(node), []
+                    else:
+                        return False, None, []
+                
+                node_id = node.get("id")
+                children = [p for p in pool if p.get("parent") == node_id]
+                
+                active_children = []
+                child_descendants = []
+                for child in children:
+                    ok, rep, desc = process_node(child)
+                    if ok:
+                        active_children.append(rep)
+                        child_descendants.extend(desc)
+                        
+                if len(active_children) == 0:
+                    return False, None, []
+                elif len(active_children) == 1:
+                    single_child = active_children[0]
+                    transformed = dict(single_child)
+                    transformed["level"] = node.get("level")
+                    transformed["parent"] = node.get("parent")
+                    transformed["priority"] = node.get("priority", 0)
+                    
+                    shifted_descendants = []
+                    for desc in child_descendants:
+                        new_desc = dict(desc)
+                        new_desc["level"] = max(1, desc.get("level", 1) - 1)
+                        shifted_descendants.append(new_desc)
+                    return True, transformed, shifted_descendants
+                else:
+                    transformed_node = dict(node)
+                    transformed_node["context_rules"] = {}
+                    descendants = list(active_children) + child_descendants
+                    return True, transformed_node, descendants
+
+            # Root nodes are those with level == 1
+            l1_roots = [p for p in pool if p.get("level") == 1]
             
             filtered = []
-            for item in pool:
-                if not item.get("is_active", True):
-                    continue
-                if self.is_item_matching_context(item):
-                    filtered.append(item)
+            for root in l1_roots:
+                ok, rep, desc = process_node(root)
+                if ok:
+                    filtered.append(rep)
+                    filtered.extend(desc)
             return filtered
         except Exception as ex:
             log_debug(u"Error filtering pool by context: {}".format(safe_str(ex)))
@@ -2286,8 +2538,9 @@ class RadialMenuWindow(Window):
         if btn_name:
             self.update_button_ui_by_name(btn_name, name, icon_type, icon_value)
 
-    def setup_customizer_mode(self):
+    def setup_customizer_mode(self, show_window=False):
         self.customizer_mode = True
+        self.cache_revit_context()
         
         # Subscribe to Revit InputManager events for drag and drop (including dropdowns/pulldowns)
         try:
@@ -2322,8 +2575,8 @@ class RadialMenuWindow(Window):
         from System.Windows.Media import SolidColorBrush, ColorConverter
         try:
             self.BtnCoreMove.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF0083B0"))
-            self.BtnCorePool.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF4CAF50"))
-            self.BtnCoreAppearance.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFC107"))
+            self.BtnCorePool.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFE53935"))
+            self.BtnCoreAppearance.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF55555C"))
             self.BtnCoreExit.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFE53935"))
         except:
             pass
@@ -2391,15 +2644,32 @@ class RadialMenuWindow(Window):
                     log_debug(u"Failed to set Customizer Window Owner: {}".format(safe_str(owner_ex)))
                 
                 self.customizer_window = cust_win
+                try:
+                    p = get_persistence()
+                    if p:
+                        p["customizer_window"] = cust_win
+                except:
+                    pass
                 log_debug(u"Created separate Customizer Window successfully.")
             except Exception as win_ex:
                 log_debug(u"Failed to create Customizer Window: {}".format(safe_str(win_ex)))
                 
         from System.Windows import Visibility
-        self.CustomizerBorder.Visibility = Visibility.Collapsed
-        if hasattr(self, "customizer_window") and self.customizer_window:
-            self.customizer_window.Show()
-            self.customizer_window.Activate()
+        if show_window:
+            self.CustomizerBorder.Visibility = Visibility.Visible
+            if hasattr(self, "customizer_window") and self.customizer_window:
+                try:
+                    self.customizer_window.Show()
+                    self.customizer_window.Activate()
+                except:
+                    pass
+        else:
+            self.CustomizerBorder.Visibility = Visibility.Collapsed
+            if hasattr(self, "customizer_window") and self.customizer_window:
+                try:
+                    self.customizer_window.Hide()
+                except:
+                    pass
         
         # Disable edit panel by default on opening
         self.hide_edit_panel()
@@ -2415,12 +2685,21 @@ class RadialMenuWindow(Window):
             try:
                 # Wire up trigger mode combobox
                 self.TriggerModeComboBox.SelectionChanged += self.on_trigger_mode_changed
+                # Wire up use circles checkbox
+                self.UseCirclesCheckBox.Checked += self.on_appearance_setting_changed
+                self.UseCirclesCheckBox.Unchecked += self.on_appearance_setting_changed
+                # Wire up enable logging checkbox
+                self.EnableLoggingCheckBox.Checked += self.on_appearance_setting_changed
+                self.EnableLoggingCheckBox.Unchecked += self.on_appearance_setting_changed
+                # Wire up animation style combo
+                self.AnimationStyleComboBox.SelectionChanged += self.on_animation_style_changed
                 # Wire up appearance sliders
                 self.DelaySlider.ValueChanged += self.on_appearance_setting_changed
                 self.CoreRadiusSlider.ValueChanged += self.on_appearance_setting_changed
                 self.PetalWidthSlider.ValueChanged += self.on_appearance_setting_changed
                 self.RingSpacingSlider.ValueChanged += self.on_appearance_setting_changed
                 self.SectorSpacingSlider.ValueChanged += self.on_appearance_setting_changed
+                self.PetalOpacitySlider.ValueChanged += self.on_appearance_setting_changed
                 
                 # Wire up max angle sliders
                 self.L2MaxAngleSlider.ValueChanged += self.on_appearance_setting_changed
@@ -2428,6 +2707,9 @@ class RadialMenuWindow(Window):
                 
                 # Wire up theme combo
                 self.ThemeComboBox.SelectionChanged += self.on_theme_changed
+                
+                # Wire up color scheme combo
+                self.ColorSchemeComboBox.SelectionChanged += self.on_color_scheme_changed
                 
                 # Wire up hex colors
                 self.HexNormalText.TextChanged += self.on_hex_color_changed
@@ -2457,9 +2739,7 @@ class RadialMenuWindow(Window):
                 self.BtnPoolItemCancel.Click += self.on_cancel_edit_clicked
                 
                 # Connect add buttons
-                self.BtnAddFromPyRevit.Click += self.on_add_from_pyrevit_clicked
-                self.BtnAddSubmenuPool.Click += self.on_add_submenu_clicked
-                self.BtnAddEmptyPool.Click += self.on_add_empty_clicked
+                self.BtnAddPoolItem.Click += self.on_add_pool_item_clicked
                 
                 self.SearchBox.TextChanged += self.on_search_changed
                 self.BtnPickerAddCommand.Click += self.on_picker_add_command_clicked
@@ -2584,10 +2864,210 @@ class RadialMenuWindow(Window):
         top = y_c - 12.0 # align icon's Y-center to sector center
         return left, top
 
+    def animate_gap(self, level, target_idx):
+        """Animate petals on the specified level to open a gap before target_idx."""
+        try:
+            if not getattr(self, "_move_mode_active", False):
+                return
+                
+            # If nothing changed, do not restart animations to avoid stuttering
+            current_lvl = getattr(self, "_current_gap_level", None)
+            current_idx = getattr(self, "_current_gap_idx", None)
+            if current_lvl == level and current_idx == target_idx:
+                return
+                
+            self._current_gap_level = level
+            self._current_gap_idx = target_idx
+            
+            n1, n2, n3 = getattr(self, "_level_counts", (0, 0, 0))
+            if level == 1:
+                n = max(1, n1)
+                prefix = "BtnL1_"
+            elif level == 2:
+                n = n2
+                prefix = "BtnL2_"
+            elif level == 3:
+                n = n3
+                prefix = "BtnL3_"
+            else:
+                return
+                
+            if n <= 0:
+                return
+                
+            gap_angle = 360.0 / float(n + 1)
+            if gap_angle > 40.0:
+                gap_angle = 40.0
+                
+            half_gap = gap_angle / 2.0
+            
+            from System.Windows.Media.Animation import DoubleAnimation, CubicEase, EasingMode
+            from System import TimeSpan
+            from System.Windows.Media import TransformGroup, RotateTransform
+            
+            ease = CubicEase()
+            ease.EasingMode = EasingMode.EaseOut
+            
+            for idx in range(1, n + 1):
+                btn_name = "{}{}".format(prefix, idx)
+                btn = getattr(self, btn_name, None)
+                if not btn or btn.Visibility != System.Windows.Visibility.Visible:
+                    continue
+                    
+                if target_idx is not None:
+                    if level == 1:
+                        diff = idx - target_idx
+                        if diff < -n / 2.0:
+                            diff += n
+                        elif diff >= n / 2.0:
+                            diff -= n
+                            
+                        if diff >= 0:
+                            target_rot = half_gap
+                        else:
+                            target_rot = -half_gap
+                    else:
+                        if idx >= target_idx:
+                            target_rot = half_gap
+                        else:
+                            target_rot = -half_gap
+                else:
+                    target_rot = 0.0
+                    
+                rt = None
+                group = btn.RenderTransform
+                if isinstance(group, TransformGroup):
+                    for child in group.Children:
+                        if isinstance(child, RotateTransform):
+                            rt = child
+                            break
+                    if not rt:
+                        rt = RotateTransform(0.0)
+                        group.Children.Add(rt)
+                else:
+                    group = TransformGroup()
+                    if btn.RenderTransform:
+                        group.Children.Add(btn.RenderTransform)
+                    rt = RotateTransform(0.0)
+                    group.Children.Add(rt)
+                    btn.RenderTransform = group
+                    
+                da = DoubleAnimation(target_rot, TimeSpan.FromMilliseconds(200))
+                da.EasingFunction = ease
+                rt.BeginAnimation(RotateTransform.AngleProperty, da)
+                
+        except Exception as ex:
+            log_debug("Error in animate_gap: " + str(ex))
+
+    def clear_gap(self):
+        """Reset all petal rotation animations to 0."""
+        try:
+            self._current_gap_level = None
+            self._current_gap_idx = None
+            
+            from System.Windows.Media.Animation import DoubleAnimation, CubicEase, EasingMode
+            from System import TimeSpan
+            from System.Windows.Media import TransformGroup, RotateTransform
+            
+            ease = CubicEase()
+            ease.EasingMode = EasingMode.EaseOut
+            
+            for prefix in ["BtnL1_", "BtnL2_", "BtnL3_"]:
+                for idx in range(1, 11):
+                    btn_name = "{}{}".format(prefix, idx)
+                    btn = getattr(self, btn_name, None)
+                    if not btn:
+                        continue
+                        
+                    group = btn.RenderTransform
+                    if isinstance(group, TransformGroup):
+                        for child in group.Children:
+                            if isinstance(child, RotateTransform):
+                                da = DoubleAnimation(0.0, TimeSpan.FromMilliseconds(200))
+                                da.EasingFunction = ease
+                                child.BeginAnimation(RotateTransform.AngleProperty, da)
+                                break
+        except Exception as ex:
+            log_debug("Error in clear_gap: " + str(ex))
+
+    def on_window_preview_drag_over(self, sender, args):
+        try:
+            if not getattr(self, "customizer_mode", False) or not getattr(self, "_move_mode_active", False):
+                return
+            if not args.Data.GetDataPresent("PyRevitCommandJSON"):
+                return
+                
+            import System.Windows
+            pos = args.GetPosition(self)
+            
+            # Show and update custom drag preview
+            try:
+                cmd_json = args.Data.GetData("PyRevitCommandJSON")
+                import json
+                cmd_data = json.loads(cmd_json)
+                self.update_drag_preview(pos.X, pos.Y, cmd_data.get("icon_path"), cmd_data.get("icon"))
+            except Exception as preview_ex:
+                pass
+
+            level, slot = self.get_slot_from_coordinates(pos.X, pos.Y)
+            if level is not None and slot is not None:
+                target_btn = SLOT_BUTTONS.get(slot)
+                if target_btn:
+                    target_idx = int(target_btn[6:])
+                    self.animate_gap(level, target_idx)
+                    args.Effects = System.Windows.DragDropEffects.Copy
+                    args.Handled = True
+            else:
+                self.clear_gap()
+                args.Effects = getattr(System.Windows.DragDropEffects, "None")
+                args.Handled = True
+        except Exception as ex:
+            log_debug("Error in on_window_preview_drag_over: " + str(ex))
+
+    def on_window_preview_drop(self, sender, args):
+        try:
+            if not getattr(self, "customizer_mode", False) or not getattr(self, "_move_mode_active", False):
+                return
+            if args.Data.GetDataPresent("PyRevitCommandJSON"):
+                import System.Windows
+                pos = args.GetPosition(self)
+                level, slot = self.get_slot_from_coordinates(pos.X, pos.Y)
+                log_debug(u"on_window_preview_drop: pos=({:.1f}, {:.1f}), level={}, slot={}".format(pos.X, pos.Y, level, slot))
+                self.clear_gap()
+                if level is not None and slot is not None:
+                    cmd_json = args.Data.GetData("PyRevitCommandJSON")
+                    import json
+                    cmd_data = json.loads(cmd_json)
+                    log_debug(u"Dropped command '{}' via window onto slot {}.".format(cmd_data["name"], slot))
+                    self.assign_command_to_slot_data(slot, cmd_data)
+                    args.Handled = True
+            else:
+                self.clear_gap()
+        except Exception as ex:
+            log_debug("Error in on_window_preview_drop: " + str(ex))
+        finally:
+            self.hide_drag_preview()
+
     def update_radial_geometry(self):
         try:
             from System.Windows import Visibility, CornerRadius
             from System.Windows.Controls import Canvas
+            from System.Windows.Media import TransformGroup, RotateTransform
+            
+            # Reset all petal transforms, animations and opacities
+            self._current_gap_level = None
+            self._current_gap_idx = None
+            for prefix in ["BtnL1_", "BtnL2_", "BtnL3_"]:
+                for idx in range(1, 11):
+                    btn = getattr(self, "{}{}".format(prefix, idx), None)
+                    if btn:
+                        btn.Opacity = 1.0
+                        group = btn.RenderTransform
+                        if isinstance(group, TransformGroup):
+                            for child in group.Children:
+                                if isinstance(child, RotateTransform):
+                                    child.BeginAnimation(RotateTransform.AngleProperty, None)
+                                    child.Angle = 0.0
 
             settings = self._config_data.get("settings", dict(DEFAULT_SETTINGS))
             core_radius = float(settings.get("core_radius", 45))
@@ -2619,6 +3099,23 @@ class RadialMenuWindow(Window):
             # Level 3
             r3_in = r2_out + ring_gap
             r3_out = r3_in + petal_width
+            
+            use_circles = bool(settings.get("use_circles", False))
+            
+            def get_petal_or_circle_path(r_in, r_out, angle, n_eff):
+                if use_circles:
+                    r_mid = (r_in + r_out) / 2.0
+                    rad = angle * math.pi / 180.0
+                    mx = cx + r_mid * math.cos(rad)
+                    my = cy + r_mid * math.sin(rad)
+                    circle_r = (r_out - r_in) / 2.0 - 2.0
+                    if circle_r < 5.0:
+                        circle_r = 5.0
+                    return "M {0:.2f},{1:.2f} a {2:.2f},{2:.2f} 0 1,0 {3:.2f},0 a {2:.2f},{2:.2f} 0 1,0 -{3:.2f},0 Z".format(
+                        mx - circle_r, my, circle_r, 2.0 * circle_r
+                    )
+                else:
+                    return self.get_sector_path_parallel(cx, cy, r_in, r_out, angle, n_eff, gap_width)
             
             # Update Center Core background size and position
             self.CenterCoreBg.Width = core_radius * 2.0
@@ -2707,7 +3204,7 @@ class RadialMenuWindow(Window):
                     angle = 270.0 + (idx - 1) * (360.0 / float(n1_eff))
                     angle = angle % 360.0
                     
-                    path_str = self.get_sector_path_parallel(cx, cy, r1_in, r1_out, angle, n1_eff, gap_width)
+                    path_str = get_petal_or_circle_path(r1_in, r1_out, angle, n1_eff)
                     btn.Tag = path_str
                     
                     panel_name = "BtnL1_{}Panel".format(idx)
@@ -2742,7 +3239,7 @@ class RadialMenuWindow(Window):
                     offset = (idx - 1 - (n2 - 1) / 2.0) * (360.0 / float(n2_eff))
                     angle = (parent_l1_angle + offset) % 360.0
                     
-                    path_str = self.get_sector_path_parallel(cx, cy, r2_in, r2_out, angle, n2_eff, gap_width)
+                    path_str = get_petal_or_circle_path(r2_in, r2_out, angle, n2_eff)
                     btn.Tag = path_str
                     
                     panel_name = "BtnL2_{}Panel".format(idx)
@@ -2776,7 +3273,7 @@ class RadialMenuWindow(Window):
                     offset = (idx - 1 - (n3 - 1) / 2.0) * (360.0 / float(n3_eff))
                     angle = (parent_l2_angle + offset) % 360.0
                     
-                    path_str = self.get_sector_path_parallel(cx, cy, r3_in, r3_out, angle, n3_eff, gap_width)
+                    path_str = get_petal_or_circle_path(r3_in, r3_out, angle, n3_eff)
                     btn.Tag = path_str
                     
                     panel_name = "BtnL3_{}Panel".format(idx)
@@ -2800,19 +3297,61 @@ class RadialMenuWindow(Window):
         from System.Windows.Media import ColorConverter, SolidColorBrush
         try:
             settings = self._config_data.get("settings", dict(DEFAULT_SETTINGS))
-            theme_name = settings.get("theme", "Revit Theme")
             
-            if theme_name == "Revit Theme":
-                theme_colors = get_revit_theme_colors()
+            # Check for color_scheme setting first, which takes precedence
+            color_scheme = settings.get("color_scheme", "auto")
+            
+            if color_scheme == "auto":
+                # Check if theme API is supported
+                is_theme_api_supported = False
+                try:
+                    from Autodesk.Revit.UI import UIThemeManager
+                    is_theme_api_supported = True
+                except:
+                    pass
+                
+                if is_theme_api_supported:
+                    theme_colors = get_revit_theme_colors()
+                    color_normal = theme_colors["color_normal"]
+                    color_border = theme_colors["color_border"]
+                    color_hover_start = theme_colors["color_hover_start"]
+                    color_hover_end = theme_colors["color_hover_end"]
+                else:
+                    # Fallback to Light colors in Revit 2023 (since Revit 2023 is light)
+                    color_normal = "#F2F0F0F0"
+                    color_border = "#20000000"
+                    color_hover_start = "#FF4A90E2"
+                    color_hover_end = "#FF1D3A56"
+
+            elif color_scheme == "dark":
+                theme_colors = THEMES["pyRevit Dark"]
                 color_normal = theme_colors["color_normal"]
                 color_border = theme_colors["color_border"]
                 color_hover_start = theme_colors["color_hover_start"]
                 color_hover_end = theme_colors["color_hover_end"]
+            elif color_scheme == "light":
+                color_normal = "#F2F0F0F0"
+                color_border = "#20000000"
+                color_hover_start = "#FF4A90E2"
+                color_hover_end = "#FF1D3A56"
             else:
-                color_normal = settings.get("color_normal", "#F21E1E24")
-                color_border = settings.get("color_border", "#25FFFFFF")
-                color_hover_start = settings.get("color_hover_start", "#FF0083B0")
-                color_hover_end = settings.get("color_hover_end", "#FF004B66")
+                # Fallback to theme or manual values
+                theme_name = settings.get("theme", "Revit Theme")
+                if theme_name == "Revit Theme":
+                    theme_colors = get_revit_theme_colors()
+                    color_normal = theme_colors["color_normal"]
+                    color_border = theme_colors["color_border"]
+                    color_hover_start = theme_colors["color_hover_start"]
+                    color_hover_end = theme_colors["color_hover_end"]
+                else:
+                    color_normal = settings.get("color_normal", "#F21E1E24")
+                    color_border = settings.get("color_border", "#25FFFFFF")
+                    color_hover_start = settings.get("color_hover_start", "#FF0083B0")
+                    color_hover_end = settings.get("color_hover_end", "#FF004B66")
+            
+            # Apply user-defined petal opacity to the normal background color
+            petal_opacity = int(settings.get("petal_opacity", 95))
+            color_normal = apply_opacity_to_hex_color(color_normal, petal_opacity)
             
             self.Resources["NormalColor"] = ColorConverter.ConvertFromString(color_normal)
             self.Resources["BorderColor"] = ColorConverter.ConvertFromString(color_border)
@@ -2827,6 +3366,9 @@ class RadialMenuWindow(Window):
             normal_lum = get_luminance(color_normal)
             is_light = (normal_lum > 0.5)
             self._is_light = is_light
+            
+            global _IS_MENU_DARK
+            _IS_MENU_DARK = not is_light
             
             if is_light:
                 c_bg = "#FFF5F5F7"         # Window Background
@@ -2858,6 +3400,48 @@ class RadialMenuWindow(Window):
         except Exception as ex:
             log_debug(u"Error applying theme colors: {}".format(safe_str(ex)))
 
+    def on_color_scheme_changed(self, sender, args):
+        if getattr(self, "_updating_ui_elements", False):
+            return
+        try:
+            idx = self.ColorSchemeComboBox.SelectedIndex
+            mapping = {
+                0: "dark",
+                1: "light",
+                2: "auto"
+            }
+            color_scheme = mapping.get(idx, "dark")
+            
+            # Read and update settings
+            settings = self._config_data.get("settings", {})
+            settings["color_scheme"] = color_scheme
+            
+            # Update active colors based on the chosen scheme
+            if color_scheme == "dark":
+                theme_colors = THEMES["pyRevit Dark"]
+                settings["color_normal"] = theme_colors["color_normal"]
+                settings["color_border"] = theme_colors["color_border"]
+                settings["color_hover_start"] = theme_colors["color_hover_start"]
+                settings["color_hover_end"] = theme_colors["color_hover_end"]
+            elif color_scheme == "light":
+                settings["color_normal"] = "#F2F0F0F0"
+                settings["color_border"] = "#20000000"
+                settings["color_hover_start"] = "#FF4A90E2"
+                settings["color_hover_end"] = "#FF1D3A56"
+            elif color_scheme == "auto":
+                theme_colors = get_revit_theme_colors()
+                settings["color_normal"] = theme_colors["color_normal"]
+                settings["color_border"] = theme_colors["color_border"]
+                settings["color_hover_start"] = theme_colors["color_hover_start"]
+                settings["color_hover_end"] = theme_colors["color_hover_end"]
+                
+            self.apply_theme_colors()
+            self.update_radial_geometry()
+            self.queue_save_config()
+        except Exception as ex:
+            log_debug(u"Error in on_color_scheme_changed: {}".format(safe_str(ex)))
+
+
     def on_appearance_setting_changed(self, sender, args):
         if not hasattr(self, "_config_data") or not self._config_data:
             return
@@ -2867,6 +3451,9 @@ class RadialMenuWindow(Window):
             
         try:
             settings = self._config_data.get("settings", {})
+            
+            settings["use_circles"] = bool(self.UseCirclesCheckBox.IsChecked)
+            settings["enable_logging"] = bool(self.EnableLoggingCheckBox.IsChecked)
             
             settings["hold_delay_ms"] = int(self.DelaySlider.Value)
             self.DelayValueText.Text = u"{} ms".format(settings["hold_delay_ms"])
@@ -2884,6 +3471,9 @@ class RadialMenuWindow(Window):
             
             settings["gap_width"] = float(self.SectorSpacingSlider.Value)
             self.SectorSpacingValueText.Text = u"{:.1f} px".format(settings["gap_width"])
+            
+            settings["petal_opacity"] = int(self.PetalOpacitySlider.Value)
+            self.PetalOpacityValueText.Text = u"{}%".format(settings["petal_opacity"])
             
             settings["l2_max_angle"] = int(self.L2MaxAngleSlider.Value)
             self.L2MaxAngleValueText.Text = u"{}°".format(settings["l2_max_angle"])
@@ -2921,6 +3511,18 @@ class RadialMenuWindow(Window):
             self.queue_save_config()
         except Exception as ex:
             log_debug(u"Error in on_trigger_mode_changed: {}".format(safe_str(ex)))
+
+    def on_animation_style_changed(self, sender, args):
+        if getattr(self, "_updating_ui_elements", False):
+            return
+        try:
+            settings = self._config_data.get("settings", {})
+            idx = self.AnimationStyleComboBox.SelectedIndex
+            mapping = {0: "fade", 1: "pop", 2: "fan"}
+            settings["animation_style"] = mapping.get(idx, "fade")
+            self.queue_save_config()
+        except Exception as ex:
+            log_debug("Error in on_animation_style_changed: " + str(ex))
 
     def on_theme_changed(self, sender, args):
         if getattr(self, "_updating_ui_elements", False):
@@ -3015,11 +3617,48 @@ class RadialMenuWindow(Window):
             self.SectorSpacingSlider.Value = float(settings.get("gap_width", 3))
             self.SectorSpacingValueText.Text = u"{:.1f} px".format(self.SectorSpacingSlider.Value)
             
+            self.PetalOpacitySlider.Value = float(settings.get("petal_opacity", 95))
+            self.PetalOpacityValueText.Text = u"{}%".format(int(self.PetalOpacitySlider.Value))
+            
             self.L2MaxAngleSlider.Value = float(settings.get("l2_max_angle", 90))
             self.L2MaxAngleValueText.Text = u"{}°".format(int(self.L2MaxAngleSlider.Value))
             
             self.L3MaxAngleSlider.Value = float(settings.get("l3_max_angle", 90))
             self.L3MaxAngleValueText.Text = u"{}°".format(int(self.L3MaxAngleSlider.Value))
+            
+            self.UseCirclesCheckBox.IsChecked = bool(settings.get("use_circles", False))
+            self.EnableLoggingCheckBox.IsChecked = bool(settings.get("enable_logging", False))
+            
+            anim_style = settings.get("animation_style", "fade")
+            anim_mapping = {"fade": 0, "pop": 1, "fan": 2}
+            self.AnimationStyleComboBox.SelectedIndex = anim_mapping.get(anim_style, 0)
+            
+            # Populate Color Scheme selection
+            color_scheme = settings.get("color_scheme", "auto")
+            scheme_mapping = {
+                "dark": 0,
+                "light": 1,
+                "auto": 2
+            }
+            
+            # Check if Revit theme manager is supported
+            is_theme_api_supported = False
+            try:
+                from Autodesk.Revit.UI import UIThemeManager
+                is_theme_api_supported = True
+            except:
+                pass
+                
+            if not is_theme_api_supported:
+                self.ColorSchemeAutoItem.IsEnabled = False
+                self.ColorSchemeAutoItem.ToolTip = "Revit Theme detection is only available in Revit 2024+"
+                if color_scheme == "auto":
+                    color_scheme = "light"
+                    settings["color_scheme"] = "light"
+
+                    
+            self.ColorSchemeComboBox.SelectedIndex = scheme_mapping.get(color_scheme, 0)
+
             
             theme_name = settings.get("theme", "Revit Theme")
             mapping = {
@@ -3044,15 +3683,19 @@ class RadialMenuWindow(Window):
             self._updating_ui_elements = False
 
     def normalize_slots(self):
-        """Normalize pool priorities within each level."""
+        """Normalize pool priorities within each level and parent."""
         try:
             pool = self._config_data.get("command_pool", [])
-            for level in [1, 2, 3]:
-                level_items = sorted(
-                    [p for p in pool if p.get("level") == level],
-                    key=lambda x: x.get("priority", 0)
-                )
-                for idx, item in enumerate(level_items):
+            grouped = {}
+            for item in pool:
+                lvl = item.get("level", 1)
+                par = item.get("parent")
+                key = (lvl, par)
+                grouped.setdefault(key, []).append(item)
+                
+            for key, items in grouped.items():
+                sorted_items = sorted(items, key=lambda x: x.get("priority", 0))
+                for idx, item in enumerate(sorted_items):
                     item["priority"] = (idx + 1) * 10
             save_config(self._config_data)
             log_debug(u"normalize_slots (pool) completed.")
@@ -3081,8 +3724,8 @@ class RadialMenuWindow(Window):
             
             # Highlight Move button, dim others
             self.BtnCoreMove.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF0083B0"))
-            self.BtnCorePool.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF4CAF50"))
-            self.BtnCoreAppearance.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFC107"))
+            self.BtnCorePool.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFE53935"))
+            self.BtnCoreAppearance.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF55555C"))
             self.BtnCoreExit.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFE53935"))
             
             # Collapse customizer panel inside customizer window
@@ -3109,7 +3752,7 @@ class RadialMenuWindow(Window):
             # Highlight Pool button
             self.BtnCoreMove.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF55555C"))
             self.BtnCorePool.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF0083B0"))
-            self.BtnCoreAppearance.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFC107"))
+            self.BtnCoreAppearance.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF55555C"))
             self.BtnCoreExit.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFE53935"))
             
             # Expand customizer panel, switch to Tab 0 (Command Pool)
@@ -3137,7 +3780,7 @@ class RadialMenuWindow(Window):
             
             # Highlight Appearance button
             self.BtnCoreMove.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF55555C"))
-            self.BtnCorePool.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF4CAF50"))
+            self.BtnCorePool.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFE53935"))
             self.BtnCoreAppearance.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF0083B0"))
             self.BtnCoreExit.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFE53935"))
             
@@ -3224,8 +3867,8 @@ class RadialMenuWindow(Window):
             # Reset backgrounds
             from System.Windows.Media import SolidColorBrush, ColorConverter
             self.BtnCoreMove.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF55555C"))
-            self.BtnCorePool.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF4CAF50"))
-            self.BtnCoreAppearance.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFC107"))
+            self.BtnCorePool.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFE53935"))
+            self.BtnCoreAppearance.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF55555C"))
             self.BtnCoreExit.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FFE53935"))
             
             # Reload layouts and apply geometries
@@ -3307,6 +3950,24 @@ class RadialMenuWindow(Window):
 
     def on_window_closing(self, sender, args):
         global _active_window
+        # Unsubscribe from unhandled exception handlers to prevent memory leaks
+        try:
+            if hasattr(self, "_global_unhandled_handler") and self._global_unhandled_handler:
+                import System
+                System.AppDomain.CurrentDomain.UnhandledException -= self._global_unhandled_handler
+                self._global_unhandled_handler = None
+                log_debug("Unsubscribed from global AppDomain exception handler.")
+        except Exception as ex_unsub:
+            log_debug("Failed to unsubscribe global exception handler: " + str(ex_unsub))
+
+        try:
+            if hasattr(self, "_dispatcher_unhandled_handler") and self._dispatcher_unhandled_handler:
+                self.Dispatcher.UnhandledException -= self._dispatcher_unhandled_handler
+                self._dispatcher_unhandled_handler = None
+                log_debug("Unsubscribed from Dispatcher exception handler.")
+        except Exception as ex_unsub:
+            log_debug("Failed to unsubscribe Dispatcher exception handler: " + str(ex_unsub))
+
         # Close customizer window if open
         try:
             # Unsubscribe from Revit InputManager events on window closing
@@ -3321,6 +3982,12 @@ class RadialMenuWindow(Window):
                 self.customizer_window.Closing -= self.on_customizer_window_closing
                 self.customizer_window.Close()
                 self.customizer_window = None
+                try:
+                    p = get_persistence()
+                    if p:
+                        p["customizer_window"] = None
+                except:
+                    pass
                 log_debug("Closed customizer window on main window closing.")
         except Exception as ex:
             log_debug("Error closing customizer_window: " + str(ex))
@@ -3348,6 +4015,18 @@ class RadialMenuWindow(Window):
             
         set_active_window(None)
         log_debug(u"RadialMenuWindow closed, _active_window cleared.")
+
+    def on_window_loaded(self, sender, args):
+        try:
+            self.PreviewDragOver += self.on_window_preview_drag_over
+            self.PreviewDrop += self.on_window_preview_drop
+            self.PreviewDragLeave += self.on_window_preview_drag_leave
+            self.DragPreviewBorder = self.FindName("DragPreviewBorder")
+            self.DragPreviewImage = self.FindName("DragPreviewImage")
+            self.DragPreviewEmoji = self.FindName("DragPreviewEmoji")
+            self.animate_level("SubMenuLevel1", True)
+        except Exception as ex:
+            log_debug("Error in on_window_loaded: " + str(ex))
 
     # ==================== POOL LIST UI METHODS ====================
     
@@ -3462,11 +4141,11 @@ class RadialMenuWindow(Window):
             return
             
         try:
-            category_groups = getattr(self, "_preloaded_category_groups", {}) or {}
-            reflected = list(getattr(self, "_preloaded_classes", []))
-            
-            # Fallback if preloading failed
-            if not reflected:
+            global _CACHED_REFLECTED_CLASSES, _CACHED_CATEGORY_GROUPS
+            if _CACHED_REFLECTED_CLASSES is not None:
+                reflected = list(_CACHED_REFLECTED_CLASSES)
+                category_groups = dict(_CACHED_CATEGORY_GROUPS)
+            else:
                 import Autodesk.Revit.DB as db
                 category_groups = {}
                 reflected = []
@@ -3511,6 +4190,10 @@ class RadialMenuWindow(Window):
                     import sys
                     cat_ex = sys.exc_info()[1]
                     log_debug("Failed to get categories fallback: " + str(cat_ex))
+                
+                # Save to cache
+                _CACHED_REFLECTED_CLASSES = list(reflected)
+                _CACHED_CATEGORY_GROUPS = dict(category_groups)
 
             # 3. Get currently selected element classes from Revit (ONCE)
             intersected_classes = []
@@ -3604,6 +4287,13 @@ class RadialMenuWindow(Window):
             self.EditItemCommandTxt.Text = item.get("command", "")
             self.EditItemIconTxt.Text = item.get("icon", "")
             
+            # Toggle Visibility Rules Section for submenus
+            is_submenu = item.get("command") in ["submenu1", "submenu2"]
+            if is_submenu:
+                self.VisibilityRulesSection.Visibility = System.Windows.Visibility.Collapsed
+            else:
+                self.VisibilityRulesSection.Visibility = System.Windows.Visibility.Visible
+            
             
             # 4. View filters CheckBoxes
             rules = item.get("context_rules", {}) or {}
@@ -3670,7 +4360,10 @@ class RadialMenuWindow(Window):
             if len(checked_items) > 1:
                 # Bulk edit saving
                 for w in checked_items:
-                    w._item["context_rules"] = dict(rules)
+                    if w._item.get("command") not in ["submenu1", "submenu2"]:
+                        w._item["context_rules"] = dict(rules)
+                    else:
+                        w._item["context_rules"] = {}
                 log_debug(u"Bulk saved context rules for {} items.".format(len(checked_items)))
             else:
                 item = getattr(self, "_editing_pool_item", None)
@@ -3689,7 +4382,11 @@ class RadialMenuWindow(Window):
                 if not icon_val:
                     icon_val = suggest_emoji_by_name(item["name"])
                 item["icon"] = icon_val
-                item["context_rules"] = rules
+                
+                if item["command"] in ["submenu1", "submenu2"]:
+                    item["context_rules"] = {}
+                else:
+                    item["context_rules"] = rules
                 log_debug(u"Saved pool item: {}".format(item.get("name")))
             
             save_config(self._config_data)
@@ -3766,6 +4463,13 @@ class RadialMenuWindow(Window):
                 self.BtnSelectIcon.IsEnabled = False
                 
                 rules = checked_items[0]._item.get("context_rules", {}) or {}
+                
+            # Toggle Visibility Rules Section for submenus
+            any_submenu = any(w._item.get("command") in ["submenu1", "submenu2"] for w in checked_items)
+            if any_submenu:
+                self.VisibilityRulesSection.Visibility = System.Windows.Visibility.Collapsed
+            else:
+                self.VisibilityRulesSection.Visibility = System.Windows.Visibility.Visible
                 
             if "allowed_views" in rules:
                 allowed_views = rules["allowed_views"] or []
@@ -3947,6 +4651,21 @@ class RadialMenuWindow(Window):
         except Exception as ex:
             log_debug(u"Error in on_add_builtin_clicked: {}".format(safe_str(ex)))
             
+    def on_add_pool_item_clicked(self, sender, args):
+        """Handle pool item addition based on ComboBox selection."""
+        try:
+            selected_index = self.ComboAddType.SelectedIndex
+            if selected_index == 0:
+                self.on_add_from_pyrevit_clicked(sender, args)
+            elif selected_index == 1:
+                self.on_add_submenu_clicked(sender, args)
+            elif selected_index == 2:
+                self.on_add_empty_clicked(sender, args)
+            else:
+                log_debug(u"Unknown add type selected in ComboBox.")
+        except Exception as ex:
+            log_debug(u"Error in on_add_pool_item_clicked: {}".format(safe_str(ex)))
+
     def on_add_submenu_clicked(self, sender, args):
         """Add a new submenu to the pool."""
         try:
@@ -4127,7 +4846,7 @@ class RadialMenuWindow(Window):
                     display_name = display_name.split(" (")[0].strip()
                     
                 icon_val = selected_item._icon_path
-                if is_builtin and icon_val:
+                if icon_val:
                     if os.path.isabs(icon_val) and "extracted_icons" in icon_val:
                         parts = icon_val.split("extracted_icons")
                         if len(parts) > 1:
@@ -4478,10 +5197,19 @@ class RadialMenuWindow(Window):
                 return
                 
             from System.Windows.Media import TransformGroup, TranslateTransform
+            from System.Windows import Visibility
             
             self._dragged_petal = sender
             self._drag_start_mouse_pos = args.GetPosition(self)
             sender.CaptureMouse()
+            
+            # Hide the text label and arrow of the dragged petal button during drag
+            label_border = getattr(self, sender.Name + "LabelBorder", None)
+            if label_border:
+                label_border.Visibility = Visibility.Collapsed
+            arrow_element = getattr(self, sender.Name + "Arrow", None)
+            if arrow_element:
+                arrow_element.Visibility = Visibility.Collapsed
             
             self._original_transform = sender.RenderTransform
             self._translate_transform = TranslateTransform(0.0, 0.0)
@@ -4532,8 +5260,17 @@ class RadialMenuWindow(Window):
                     
                 if dist > r_out + 30.0:
                     sender.Opacity = 0.4
+                    self.clear_gap()
                 else:
                     sender.Opacity = 1.0
+                    target_level, target_slot = self.get_slot_from_coordinates(mouse_in_canvas.X, mouse_in_canvas.Y)
+                    if target_level == level and target_slot is not None:
+                        target_btn = SLOT_BUTTONS.get(target_slot)
+                        if target_btn:
+                            target_idx = int(target_btn[6:])
+                            self.animate_gap(level, target_idx)
+                    else:
+                        self.clear_gap()
             args.Handled = True
         except Exception as ex:
             log_debug(u"Error in on_petal_mouse_move: {}".format(safe_str(ex)))
@@ -4557,13 +5294,19 @@ class RadialMenuWindow(Window):
         r3_in = r2_out + ring_gap
         r3_out = r3_in + petal_width
         
+        # Mid-point boundaries between levels to avoid any overlapping tolerance zones
+        b_core_l1 = core_radius + ring_gap / 2.0
+        b_l1_l2 = r1_out + ring_gap / 2.0
+        b_l2_l3 = r2_out + ring_gap / 2.0
+        
         level = None
-        # Allow some tolerance (+/- 15px)
-        if r1_in - 15.0 <= dist <= r1_out + 15.0:
+        if dist < b_core_l1 - 10.0:
+            level = None
+        elif dist < b_l1_l2:
             level = 1
-        elif r2_in - 15.0 <= dist <= r2_out + 15.0:
+        elif dist < b_l2_l3:
             level = 2
-        elif r3_in - 15.0 <= dist <= r3_out + 15.0:
+        elif dist <= r3_out + 25.0:
             level = 3
             
         if not level:
@@ -4571,31 +5314,113 @@ class RadialMenuWindow(Window):
             
         n1, n2, n3 = getattr(self, "_level_counts", (0, 0, 0))
         
+        # We need the parent's angle to determine starting position of Level 2/3
+        parent_angle = 270.0
         if level == 1:
             n_sectors = max(1, n1)
+            n_eff = n_sectors
             start_slot = 1
+            start_angle = 270.0 - (360.0 / float(n_eff)) / 2.0
         elif level == 2:
             n_sectors = max(1, n2)
+            # Find effective n_sectors (n2_eff)
+            l2_max_angle = float(settings.get("l2_max_angle", 90))
+            natural_span = 360.0 / float(n_sectors) if n_sectors > 0 else 360.0
+            if natural_span > l2_max_angle:
+                n_eff = max(n_sectors, int(360.0 / l2_max_angle))
+            else:
+                n_eff = n_sectors
+                
+            # Get parent L1 angle
+            active_l1 = getattr(self, "_active_l1_parent", None)
+            if active_l1:
+                # Find the level 1 angle
+                for idx in range(1, 11):
+                    btn_name = "BtnL1_{}".format(idx)
+                    pool_item = getattr(self, "_button_to_pool_item", {}).get(btn_name)
+                    if pool_item and pool_item.get("id") == active_l1:
+                        parent_angle = 270.0 + (idx - 1) * (360.0 / float(max(1, n1)))
+                        break
             start_slot = 11
+            span = 360.0 / float(n_eff)
+            start_angle = parent_angle - (n_sectors / 2.0) * span
         else:
             n_sectors = max(1, n3)
+            l3_max_angle = float(settings.get("l3_max_angle", 90))
+            natural_span = 360.0 / float(n_sectors) if n_sectors > 0 else 360.0
+            if natural_span > l3_max_angle:
+                n_eff = max(n_sectors, int(360.0 / l3_max_angle))
+            else:
+                n_eff = n_sectors
+                
+            # Get parent L2 angle
+            active_l2 = getattr(self, "_active_l2_parent", None)
+            active_l1 = getattr(self, "_active_l1_parent", None)
+            parent_l1_angle = 270.0
+            if active_l1:
+                for idx in range(1, 11):
+                    btn_name = "BtnL1_{}".format(idx)
+                    pool_item = getattr(self, "_button_to_pool_item", {}).get(btn_name)
+                    if pool_item and pool_item.get("id") == active_l1:
+                        parent_l1_angle = 270.0 + (idx - 1) * (360.0 / float(max(1, n1)))
+                        break
+            if active_l2:
+                for idx in range(1, 11):
+                    btn_name = "BtnL2_{}".format(idx)
+                    pool_item = getattr(self, "_button_to_pool_item", {}).get(btn_name)
+                    if pool_item and pool_item.get("id") == active_l2:
+                        l2_eff = max(n2, int(360.0 / float(settings.get("l2_max_angle", 90)))) if n2 > 0 else 0
+                        offset = (idx - 1 - (n2 - 1) / 2.0) * (360.0 / float(l2_eff))
+                        parent_angle = parent_l1_angle + offset
+                        break
             start_slot = 21
+            span = 360.0 / float(n_eff)
+            start_angle = parent_angle - (n_sectors / 2.0) * span
             
         rad = math.atan2(y - cy, x - cx)
         deg = rad * 180.0 / math.pi
         if deg < 0:
             deg += 360.0
             
-        # Shift angle to align with sector 1 at 270 degrees
-        normalized_deg = deg - 270.0
-        if normalized_deg < 0:
+        # Shift angle relative to start_angle
+        normalized_deg = deg - start_angle
+        while normalized_deg < 0:
             normalized_deg += 360.0
+        while normalized_deg >= 360.0:
+            normalized_deg -= 360.0
             
-        sector_idx = int(math.floor(normalized_deg / (360.0 / float(n_sectors)))) + 1
-        if sector_idx > n_sectors:
-            sector_idx = n_sectors
+        span = 360.0 / float(n_eff)
+        boundary_idx = int(round(normalized_deg / span))
+        if boundary_idx > n_sectors:
+            boundary_idx = n_sectors
             
-        target_slot = start_slot + sector_idx - 1
+        target_idx = boundary_idx + 1
+        if target_idx < 1:
+            target_idx = 1
+        elif target_idx > n_sectors + 1:
+            target_idx = n_sectors + 1
+            
+        # Apply hysteresis to make the gap sticky
+        curr_lvl = getattr(self, "_current_gap_level", None)
+        curr_idx = getattr(self, "_current_gap_idx", None)
+        
+        if curr_lvl == level and curr_idx is not None:
+            curr_boundary_angle = start_angle + (curr_idx - 1) * span
+            diff_angle = deg - curr_boundary_angle
+            while diff_angle < -180.0:
+                diff_angle += 360.0
+            while diff_angle >= 180.0:
+                diff_angle -= 360.0
+                
+            # Sticky range is (span / 2.0) + 4.0 degrees.
+            # This allows a tiny 4-degree overshoot past the petal center,
+            # which prevents flickering but makes the gap follow the mouse instantly.
+            gap_threshold = (span / 2.0) + 4.0
+            
+            if abs(diff_angle) <= gap_threshold:
+                target_idx = curr_idx
+                
+        target_slot = start_slot + target_idx - 1
         return level, target_slot
 
     def on_petal_mouse_up(self, sender, args):
@@ -4605,6 +5430,20 @@ class RadialMenuWindow(Window):
                 
             sender.ReleaseMouseCapture()
             sender.Opacity = 1.0
+            
+            # Restore the text label and arrow visibility of the dragged petal button
+            from System.Windows import Visibility
+            label_border = getattr(self, sender.Name + "LabelBorder", None)
+            if label_border:
+                label_border.Visibility = Visibility.Visible
+            arrow_element = getattr(self, sender.Name + "Arrow", None)
+            if arrow_element:
+                pool_item = getattr(self, "_button_to_pool_item", {}).get(sender.Name)
+                is_pulldown = pool_item.get("is_pulldown", False) if pool_item else False
+                if is_pulldown:
+                    arrow_element.Visibility = Visibility.Visible
+                else:
+                    arrow_element.Visibility = Visibility.Collapsed
             
             if hasattr(self, "_original_transform"):
                 sender.RenderTransform = self._original_transform
@@ -4638,6 +5477,7 @@ class RadialMenuWindow(Window):
             self._translate_transform = None
             
             if should_delete:
+                self.clear_gap()
                 pool_item = getattr(self, "_button_to_pool_item", {}).get(sender.Name)
                 if pool_item:
                     pool = self._config_data.get("command_pool", [])
@@ -4654,27 +5494,71 @@ class RadialMenuWindow(Window):
                     save_config(self._config_data)
                     self.load_layout_configuration()
                     self.update_radial_geometry()
+                    self.load_pool_list()
                     log_debug(u"Removed petal '{}' (id: {}) via drag-out.".format(pool_item.get("name"), pool_item.get("id")))
             elif mouse_in_canvas:
                 source_btn = sender.Name
                 source_item = getattr(self, "_button_to_pool_item", {}).get(source_btn)
                 
                 target_level, target_slot = self.get_slot_from_coordinates(mouse_in_canvas.X, mouse_in_canvas.Y)
+                self.clear_gap()
+                
                 if target_level == level and target_slot is not None:
                     target_btn = SLOT_BUTTONS.get(target_slot)
                     target_item = getattr(self, "_button_to_pool_item", {}).get(target_btn)
                     
                     if source_item and target_item and source_item != target_item:
-                        # Swap their priorities
-                        sp = source_item.get("priority", 0)
-                        tp = target_item.get("priority", 0)
-                        source_item["priority"] = tp
-                        target_item["priority"] = sp
-                        
-                        save_config(self._config_data)
-                        self.load_layout_configuration()
-                        self.update_radial_geometry()
-                        log_debug(u"Swapped priorities of '{}' and '{}'.".format(source_item.get("name"), target_item.get("name")))
+                        if getattr(self, "_move_mode_active", False):
+                            pool = self._config_data.get("command_pool", [])
+                            actual_source = None
+                            actual_target = None
+                            for item in pool:
+                                if item.get("id") == source_item.get("id"):
+                                    actual_source = item
+                                if item.get("id") == target_item.get("id"):
+                                    actual_target = item
+                            
+                            if actual_source and actual_target:
+                                target_parent = actual_target.get("parent")
+                                level_items = sorted(
+                                    [p for p in pool if p.get("level") == level and p.get("parent") == target_parent],
+                                    key=lambda x: x.get("priority", 0)
+                                )
+                                
+                                if actual_source in level_items:
+                                    level_items.remove(actual_source)
+                                    
+                                try:
+                                    target_idx = level_items.index(actual_target)
+                                except ValueError:
+                                    target_idx = len(level_items)
+                                    
+                                actual_source["level"] = level
+                                actual_source["parent"] = target_parent
+                                level_items.insert(target_idx, actual_source)
+                                
+                                for idx, item in enumerate(level_items):
+                                    item["priority"] = (idx + 1) * 10
+                                    
+                                save_config(self._config_data)
+                                self.load_layout_configuration()
+                                self.update_radial_geometry()
+                                self.load_pool_list()
+                                log_debug(u"Moved petal '{}' before '{}'.".format(actual_source.get("name"), actual_target.get("name")))
+                        else:
+                            # Swap their priorities
+                            sp = source_item.get("priority", 0)
+                            tp = target_item.get("priority", 0)
+                            source_item["priority"] = tp
+                            target_item["priority"] = sp
+                            
+                            save_config(self._config_data)
+                            self.load_layout_configuration()
+                            self.update_radial_geometry()
+                            self.load_pool_list()
+                            log_debug(u"Swapped priorities of '{}' and '{}'.".format(source_item.get("name"), target_item.get("name")))
+            else:
+                self.clear_gap()
             args.Handled = True
         except Exception as ex:
             log_debug(u"Error in on_petal_mouse_up: {}".format(safe_str(ex)))
@@ -4994,8 +5878,10 @@ class RadialMenuWindow(Window):
 
     def filter_commands(self, query):
         try:
-            if query:
-                query = query.lower().strip()
+            query = query.lower().strip() if query else ""
+            # Only populate leaf commands if search query is at least 3 characters long
+            # to prevent WPF from rendering thousands of items and freezing Revit.
+            has_query = len(query) >= 3
             
             # Step 1: Filter flat list of commands matching query
             filtered_cmds = []
@@ -5009,13 +5895,14 @@ class RadialMenuWindow(Window):
                 if mode == "pyrevit" and ext_name == u"Revit Ribbon":
                     continue
                     
-                match = (not query or 
-                         query in cmd["title"].lower() or 
-                         query in cmd["ext_name"].lower() or 
-                         query in cmd["tab_name"].lower() or
-                         (cmd["pulldown_name"] and query in cmd["pulldown_name"].lower()))
-                if match:
-                    filtered_cmds.append(cmd)
+                if has_query:
+                    match = (query in cmd["title"].lower() or 
+                             query in cmd["ext_name"].lower() or 
+                             query in cmd["tab_name"].lower() or
+                             (cmd["pulldown_name"] and query in cmd["pulldown_name"].lower()))
+                    if not match:
+                        continue
+                filtered_cmds.append(cmd)
             
             # Step 2: Build hierarchy structure
             tree_data = {}
@@ -5132,21 +6019,24 @@ class RadialMenuWindow(Window):
         try:
             dep = args.OriginalSource
             if dep is not None:
-                # Traverse up to see if we clicked a CheckBox or Button
+                # Traverse up to see if we clicked a CheckBox, Button or scrollbar/non-item element
                 from System.Windows.Media import VisualTreeHelper
-                from System.Windows.Controls import CheckBox, Button
+                from System.Windows.Controls import CheckBox, Button, TreeViewItem
                 curr = dep
                 is_control = False
+                is_tree_view_item = False
                 while curr is not None:
                     if isinstance(curr, (CheckBox, Button)):
                         is_control = True
                         break
+                    if isinstance(curr, TreeViewItem):
+                        is_tree_view_item = True
                     try:
                         curr = VisualTreeHelper.GetParent(curr)
                     except:
                         break
                 
-                if is_control:
+                if is_control or not is_tree_view_item:
                     self._pool_drag_start = None
                     return
                     
@@ -5241,6 +6131,8 @@ class RadialMenuWindow(Window):
                                 log_debug("Async pool DoDragDrop failed: " + str(drag_ex))
                             finally:
                                 self.clear_drag_feedback()
+                                self.clear_gap()
+                                self.hide_drag_preview()
                                 
                         self._pool_drag_delegate = Action(run_drag_drop)
                         self.Dispatcher.BeginInvoke(self._pool_drag_delegate)
@@ -5248,6 +6140,86 @@ class RadialMenuWindow(Window):
             import sys
             ex = sys.exc_info()[1]
             log_debug(u"Error in on_pool_mouse_move: {}".format(safe_str(ex)))
+
+    def update_drag_preview(self, x, y, icon_path, icon_char):
+        try:
+            if not getattr(self, "DragPreviewBorder", None):
+                self.DragPreviewBorder = self.FindName("DragPreviewBorder")
+                self.DragPreviewImage = self.FindName("DragPreviewImage")
+                self.DragPreviewEmoji = self.FindName("DragPreviewEmoji")
+                
+            if not self.DragPreviewBorder:
+                return
+                
+            from System.Windows.Controls import Canvas as WPFCanvas
+            WPFCanvas.SetLeft(self.DragPreviewBorder, x + 15.0)
+            WPFCanvas.SetTop(self.DragPreviewBorder, y + 15.0)
+            
+            if self.DragPreviewBorder.Visibility != System.Windows.Visibility.Visible:
+                self.DragPreviewBorder.Visibility = System.Windows.Visibility.Visible
+                
+            path_to_use = icon_path if icon_path else icon_char
+            if path_to_use:
+                looks_like_path = False
+                try:
+                    p_str = unicode(path_to_use)
+                    if p_str.startswith("pack:") or p_str.startswith("http") or (":" in p_str) or ("/" in p_str) or ("\\" in p_str):
+                        looks_like_path = True
+                except:
+                    pass
+                    
+                if looks_like_path:
+                    try:
+                        import os
+                        if os.path.exists(p_str):
+                            from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption
+                            from System.IO import FileStream, FileMode, FileAccess, FileShare
+                            bi = BitmapImage()
+                            bi.BeginInit()
+                            bi.CacheOption = BitmapCacheOption.OnLoad
+                            with FileStream(p_str, FileMode.Open, FileAccess.Read, FileShare.Read) as stream:
+                                bi.StreamSource = stream
+                                bi.EndInit()
+                            self.DragPreviewImage.Source = bi
+                            self.DragPreviewImage.Visibility = System.Windows.Visibility.Visible
+                            self.DragPreviewEmoji.Visibility = System.Windows.Visibility.Collapsed
+                            return
+                        else:
+                            from System.Windows.Media.Imaging import BitmapImage
+                            from System import Uri
+                            bi = BitmapImage()
+                            bi.BeginInit()
+                            bi.UriSource = Uri(p_str)
+                            bi.EndInit()
+                            self.DragPreviewImage.Source = bi
+                            self.DragPreviewImage.Visibility = System.Windows.Visibility.Visible
+                            self.DragPreviewEmoji.Visibility = System.Windows.Visibility.Collapsed
+                            return
+                    except Exception as img_ex:
+                        log_debug("Drag preview image stream load exception: " + str(img_ex))
+                
+                self.DragPreviewImage.Visibility = System.Windows.Visibility.Collapsed
+                self.DragPreviewEmoji.Text = unicode(path_to_use)
+                self.DragPreviewEmoji.Visibility = System.Windows.Visibility.Visible
+            else:
+                self.DragPreviewImage.Visibility = System.Windows.Visibility.Collapsed
+                self.DragPreviewEmoji.Text = u"📦"
+                self.DragPreviewEmoji.Visibility = System.Windows.Visibility.Visible
+        except Exception as ex:
+            log_debug("Error in update_drag_preview: " + str(ex))
+
+    def hide_drag_preview(self):
+        try:
+            if getattr(self, "DragPreviewBorder", None):
+                self.DragPreviewBorder.Visibility = System.Windows.Visibility.Collapsed
+        except:
+            pass
+
+    def on_window_preview_drag_leave(self, sender, args):
+        try:
+            self.hide_drag_preview()
+        except:
+            pass
 
     def _init_drag_preview(self):
         try:
@@ -5480,7 +6452,29 @@ class RadialMenuWindow(Window):
         args.Handled = True
 
     def on_tree_mouse_down(self, sender, args):
-        self._drag_start_point = args.GetPosition(None)
+        try:
+            dep = args.OriginalSource
+            if dep is not None:
+                from System.Windows.Media import VisualTreeHelper
+                from System.Windows.Controls import TreeViewItem
+                curr = dep
+                is_tree_view_item = False
+                while curr is not None:
+                    if isinstance(curr, TreeViewItem):
+                        is_tree_view_item = True
+                        break
+                    try:
+                        curr = VisualTreeHelper.GetParent(curr)
+                    except:
+                        break
+                if is_tree_view_item:
+                    self._drag_start_point = args.GetPosition(None)
+                else:
+                    self._drag_start_point = None
+            else:
+                self._drag_start_point = None
+        except:
+            self._drag_start_point = None
 
     def on_tree_mouse_move(self, sender, args):
         if args.LeftButton == wpf_input.MouseButtonState.Pressed:
@@ -5523,6 +6517,9 @@ class RadialMenuWindow(Window):
                                 import sys
                                 drag_ex = sys.exc_info()[1]
                                 log_debug("Async picker tree DoDragDrop failed: " + str(drag_ex))
+                            finally:
+                                self.clear_gap()
+                                self.hide_drag_preview()
                                 
                         self._tree_drag_delegate = Action(run_drag_drop)
                         self.Dispatcher.BeginInvoke(self._tree_drag_delegate)
@@ -5571,6 +6568,15 @@ class RadialMenuWindow(Window):
             btn_name = SLOT_BUTTONS.get(slot_num)
             pool_item = getattr(self, "_button_to_pool_item", {}).get(btn_name)
             
+            # Resolve pool_item to the actual dict reference in config_data to prevent modifying copies
+            actual_pool_item = None
+            if pool_item:
+                item_id = pool_item.get("id")
+                for item in pool:
+                    if item.get("id") == item_id:
+                        actual_pool_item = item
+                        break
+            
             # Determine target properties
             if 1 <= slot_num <= 10:
                 target_level = 1
@@ -5585,38 +6591,60 @@ class RadialMenuWindow(Window):
                 target_parent = getattr(self, "_active_l2_parent", "submenu2") or "submenu2"
                 target_priority = (slot_num - 20) * 10
                 
-            if pool_item:
-                target_level = pool_item.get("level", target_level)
-                target_parent = pool_item.get("parent", target_parent)
-                target_priority = pool_item.get("priority", target_priority)
+            if actual_pool_item:
+                target_level = actual_pool_item.get("level", target_level)
+                target_parent = actual_pool_item.get("parent", target_parent)
+                target_priority = actual_pool_item.get("priority", target_priority)
                 
             if dragged_item:
                 # We are moving an existing pool item!
-                # If there's a target item currently in that slot, swap their positions!
-                if pool_item and pool_item != dragged_item:
-                    # Save dragged item's current position
-                    orig_level = dragged_item.get("level", 1)
-                    orig_parent = dragged_item.get("parent")
-                    orig_priority = dragged_item.get("priority", 0)
-                    
-                    # Update dragged item to target position
+                if getattr(self, "_move_mode_active", False) and actual_pool_item and actual_pool_item != dragged_item:
+                    level_items = sorted(
+                        [p for p in pool if p.get("level") == target_level and p.get("parent") == target_parent],
+                        key=lambda x: x.get("priority", 0)
+                    )
+                    if dragged_item in level_items:
+                        level_items.remove(dragged_item)
+                        
+                    try:
+                        target_idx = level_items.index(actual_pool_item)
+                    except ValueError:
+                        target_idx = len(level_items)
+                        
                     dragged_item["level"] = target_level
                     dragged_item["parent"] = target_parent
-                    dragged_item["priority"] = target_priority
+                    level_items.insert(target_idx, dragged_item)
                     
-                    # Update target item to dragged item's original position
-                    pool_item["level"] = orig_level
-                    pool_item["parent"] = orig_parent
-                    pool_item["priority"] = orig_priority
-                    
-                    log_debug(u"Swapped pool item '{}' with '{}'.".format(dragged_item.get("name"), pool_item.get("name")))
+                    for idx, item in enumerate(level_items):
+                        item["priority"] = (idx + 1) * 10
+                        
+                    log_debug(u"Moved pool item '{}' before '{}'.".format(dragged_item.get("name"), actual_pool_item.get("name")))
                 else:
-                    # Target slot is empty, just move dragged item there
-                    dragged_item["level"] = target_level
-                    dragged_item["parent"] = target_parent
-                    dragged_item["priority"] = target_priority
-                    log_debug(u"Moved pool item '{}' to slot {}.".format(dragged_item.get("name"), slot_num))
-                    
+                    # If there's a target item currently in that slot, swap their positions!
+                    if actual_pool_item and actual_pool_item != dragged_item:
+                        # Save dragged item's current position
+                        orig_level = dragged_item.get("level", 1)
+                        orig_parent = dragged_item.get("parent")
+                        orig_priority = dragged_item.get("priority", 0)
+                        
+                        # Update dragged item to target position
+                        dragged_item["level"] = target_level
+                        dragged_item["parent"] = target_parent
+                        dragged_item["priority"] = target_priority
+                        
+                        # Update target item to dragged item's original position
+                        actual_pool_item["level"] = orig_level
+                        actual_pool_item["parent"] = orig_parent
+                        actual_pool_item["priority"] = orig_priority
+                        
+                        log_debug(u"Swapped pool item '{}' with '{}'.".format(dragged_item.get("name"), actual_pool_item.get("name")))
+                    else:
+                        # Target slot is empty, just move dragged item there
+                        dragged_item["level"] = target_level
+                        dragged_item["parent"] = target_parent
+                        dragged_item["priority"] = target_priority
+                        log_debug(u"Moved pool item '{}' to slot {}.".format(dragged_item.get("name"), slot_num))
+                        
                 # Save config and refresh everything
                 save_config(self._config_data)
                 self.load_layout_configuration()
@@ -5625,10 +6653,15 @@ class RadialMenuWindow(Window):
                 return
 
             # If not dragging from pool, we use the normal assignment/overwrite logic
-            if pool_item:
-                level = pool_item.get("level", 1)
-                parent = pool_item.get("parent")
-                priority = pool_item.get("priority", slot_num * 10)
+            insert_before_item = None
+            if getattr(self, "_move_mode_active", False) and actual_pool_item:
+                insert_before_item = actual_pool_item
+                actual_pool_item = None
+
+            if actual_pool_item:
+                level = actual_pool_item.get("level", 1)
+                parent = actual_pool_item.get("parent")
+                priority = actual_pool_item.get("priority", slot_num * 10)
             else:
                 level = target_level
                 parent = target_parent
@@ -5646,15 +6679,15 @@ class RadialMenuWindow(Window):
                 submenu_cmd = "submenu1" if level == 1 else "submenu2"
                 
                 # Check if pool item already exists for this slot
-                if pool_item:
-                    pool_item["type"] = "built_in"
-                    pool_item["name"] = cmd_data["name"]
-                    pool_item["command"] = submenu_cmd
-                    pool_item["icon"] = cmd_data["icon_path"] or u"\u25B6"
-                    pool_item["id"] = pulldown_id
+                if actual_pool_item:
+                    actual_pool_item["type"] = "built_in"
+                    actual_pool_item["name"] = cmd_data["name"]
+                    actual_pool_item["command"] = submenu_cmd
+                    actual_pool_item["icon"] = cmd_data["icon_path"] or u"\u25B6"
+                    actual_pool_item["id"] = pulldown_id
                 else:
                     import System
-                    pool_item = {
+                    new_item = {
                         "id": pulldown_id,
                         "type": "built_in",
                         "name": cmd_data["name"],
@@ -5665,7 +6698,7 @@ class RadialMenuWindow(Window):
                         "priority": priority,
                         "context_rules": {}
                     }
-                    self._config_data.setdefault("command_pool", []).append(pool_item)
+                    self._config_data.setdefault("command_pool", []).append(new_item)
                 
                 # Find all child commands belonging to this pulldown
                 child_cmds = []
@@ -5714,10 +6747,36 @@ class RadialMenuWindow(Window):
                         }
                         pool.append(new_child)
                 
+                # If we are in Move mode and dropped onto an existing petal, insert before it
+                if insert_before_item:
+                    target_level = insert_before_item.get("level", 1)
+                    target_parent = insert_before_item.get("parent")
+                    level_items = sorted(
+                        [p for p in pool if p.get("level") == target_level and p.get("parent") == target_parent and p.get("id") != pulldown_id],
+                        key=lambda x: x.get("priority", 0)
+                    )
+                    try:
+                        target_idx = level_items.index(insert_before_item)
+                    except ValueError:
+                        target_idx = len(level_items)
+                        
+                    actual_new_item = None
+                    for p in pool:
+                        if p.get("id") == pulldown_id:
+                            actual_new_item = p
+                            break
+                    if actual_new_item:
+                        actual_new_item["level"] = target_level
+                        actual_new_item["parent"] = target_parent
+                        level_items.insert(target_idx, actual_new_item)
+                        for idx, item in enumerate(level_items):
+                            item["priority"] = (idx + 1) * 10
+                            
                 self._config_data["command_pool"] = pool
                 save_config(self._config_data)
                 self.load_layout_configuration()
                 self.update_radial_geometry()
+                self.load_pool_list()
                 log_debug(u"Assigned pulldown '{}' as submenu with {} children.".format(cmd_data["name"], len(child_cmds)))
             else:
                 is_builtin = (cmd_data.get("extension") in ["Revit Built-in", "Revit Ribbon"])
@@ -5728,20 +6787,22 @@ class RadialMenuWindow(Window):
                     display_name = display_name.split(" (")[0].strip()
                     
                 icon_val = cmd_data.get("icon_path")
-                if is_builtin and icon_val:
+                if icon_val:
                     if os.path.isabs(icon_val) and "extracted_icons" in icon_val:
                         parts = icon_val.split("extracted_icons")
                         if len(parts) > 1:
                             icon_val = "extracted_icons" + parts[-1].replace("\\", "/")
                             
-                if pool_item:
-                    pool_item["type"] = cmd_type
-                    pool_item["name"] = display_name
-                    pool_item["command"] = cmd_data["unique_id"]
-                    pool_item["icon"] = icon_val
+                if actual_pool_item:
+                    actual_pool_item["type"] = cmd_type
+                    actual_pool_item["name"] = display_name
+                    actual_pool_item["command"] = cmd_data["unique_id"]
+                    actual_pool_item["icon"] = icon_val
                     
                     save_config(self._config_data)
-                    self.update_button_ui_by_name(btn_name, display_name, cmd_type, icon_val)
+                    self.load_layout_configuration()
+                    self.update_radial_geometry()
+                    self.load_pool_list()
                     log_debug(u"Assigned command '{}' (type: {}) to pool item for slot {}.".format(display_name, cmd_type, slot_num))
                 else:
                     import System
@@ -5757,10 +6818,32 @@ class RadialMenuWindow(Window):
                         "context_rules": {}
                     }
                     self._config_data.setdefault("command_pool", []).append(new_item)
+                    
+                    if insert_before_item:
+                        target_level = insert_before_item.get("level", 1)
+                        target_parent = insert_before_item.get("parent")
+                        pool = self._config_data.setdefault("command_pool", [])
+                        level_items = sorted(
+                            [p for p in pool if p.get("level") == target_level and p.get("parent") == target_parent and p != new_item],
+                            key=lambda x: x.get("priority", 0)
+                        )
+                        try:
+                            target_idx = level_items.index(insert_before_item)
+                        except ValueError:
+                            target_idx = len(level_items)
+                            
+                        new_item["level"] = target_level
+                        new_item["parent"] = target_parent
+                        level_items.insert(target_idx, new_item)
+                        for idx, item in enumerate(level_items):
+                            item["priority"] = (idx + 1) * 10
+                            
                     save_config(self._config_data)
                     self.load_layout_configuration()
                     self.update_radial_geometry()
+                    self.load_pool_list()
                     log_debug(u"Created new pool item for slot {} with command '{}' (type: {}).".format(slot_num, display_name, cmd_type))
+
         except Exception as ex:
             log_debug(u"Failed to assign command to slot: {}".format(safe_str(ex)))
             
@@ -5979,6 +7062,9 @@ class RadialMenuWindow(Window):
                             System.Windows.DragDrop.DoDragDrop(self, drag_data, System.Windows.DragDropEffects.Copy)
                         except Exception as drag_ex:
                             log_debug("Async DoDragDrop failed: " + str(drag_ex))
+                        finally:
+                            self.clear_gap()
+                            self.hide_drag_preview()
                             
                     self._menu_drag_delegate = Action(run_drag_drop)
                     self.Dispatcher.BeginInvoke(self._menu_drag_delegate)
@@ -6036,9 +7122,10 @@ class RadialMenuWindow(Window):
             
             # Submenu triggers
             if cmd_value in ["submenu1", "submenu2"]:
-                if cmd_value == "submenu1":
+                button_level = pool_item.get("level", 1)
+                if button_level == 1:
                     self.toggle_level2()
-                elif cmd_value == "submenu2":
+                elif button_level == 2:
                     self.toggle_level3()
                 return
                 
@@ -6254,11 +7341,13 @@ def get_clean_english_category_name(category):
         return category.Name or ""
 
 _CATEGORY_ALIASES_CACHE = {}
+_did_build_aliases_cache = False
 
 def build_category_aliases_cache():
-    global _CATEGORY_ALIASES_CACHE
-    if _CATEGORY_ALIASES_CACHE:
+    global _CATEGORY_ALIASES_CACHE, _did_build_aliases_cache
+    if _did_build_aliases_cache:
         return
+    _did_build_aliases_cache = True
         
     cache = {}
     try:
@@ -6285,7 +7374,8 @@ def build_category_aliases_cache():
     _CATEGORY_ALIASES_CACHE = cache
 
 def get_category_aliases(name):
-    if not _CATEGORY_ALIASES_CACHE:
+    global _CATEGORY_ALIASES_CACHE, _did_build_aliases_cache
+    if not _did_build_aliases_cache:
         build_category_aliases_cache()
         
     aliases = {name, name.lower(), name.replace(" ", "")}
@@ -6607,6 +7697,14 @@ class RadialMenuManager(object):
         self.hook_id = None
         self.hook_proc = None
         self.ui_dispatcher = None
+        self._unload_handler = None
+
+    def _on_domain_unload(self, sender, args):
+        try:
+            log_debug("AppDomain unloading or Process exiting. Automatically stopping Win32 hook.")
+            self.stop(close_active_window=True)
+        except Exception as ex:
+            log_debug("Error in _on_domain_unload: " + safe_str(ex))
 
     def start(self):
         global _hook_id, _hook_proc, _ui_dispatcher, _hold_delay_ms, _trigger_mode
@@ -6641,9 +7739,31 @@ class RadialMenuManager(object):
             raise Exception("Failed to set thread-local mouse hook. Win32 Error: " + str(err))
         log_debug(u"Hook registered successfully. hook_id={}".format(self.hook_id))
 
+        # Subscribe to AppDomain unload to prevent crashes/hangs if reload occurs
+        try:
+            import System
+            self._unload_handler = System.EventHandler(self._on_domain_unload)
+            System.AppDomain.CurrentDomain.DomainUnload += self._unload_handler
+            System.AppDomain.CurrentDomain.ProcessExit += self._unload_handler
+            log_debug("Subscribed to AppDomain DomainUnload/ProcessExit events.")
+        except Exception as ex:
+            log_debug("Failed to subscribe to AppDomain events: " + safe_str(ex))
+
     def stop(self, close_active_window=True):
         global _hook_id, _hook_proc, _active_window, _is_holding, _ui_dispatcher
         log_debug(u"RadialMenuManager.stop(close_active_window={}) called.".format(close_active_window))
+        
+        # Unsubscribe from AppDomain events
+        try:
+            if self._unload_handler:
+                import System
+                System.AppDomain.CurrentDomain.DomainUnload -= self._unload_handler
+                System.AppDomain.CurrentDomain.ProcessExit -= self._unload_handler
+                self._unload_handler = None
+                log_debug("Unsubscribed from AppDomain events.")
+        except Exception as ex:
+            log_debug("Failed to unsubscribe from AppDomain events: " + safe_str(ex))
+
         with _hold_lock:
             _is_holding = False
 
@@ -6709,7 +7829,7 @@ if __name__ == "__main__":
                 
             # Setup customizer panel and size
             set_active_window(win)
-            win.setup_customizer_mode()
+            win.setup_customizer_mode(show_window=True)
             win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen
             win.Show()
             win.Activate()
