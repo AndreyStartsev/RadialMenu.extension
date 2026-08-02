@@ -11,7 +11,8 @@ import threading
 import json
 
 # Ensure lib directory is on sys.path
-_SCRIPT_DIR = os.path.dirname(__file__)
+_CORE_DIR = os.path.dirname(__file__)
+_SCRIPT_DIR = os.path.normpath(os.path.join(_CORE_DIR, "..", "..", "..", "RadialMenu.tab", "RadialMenu.panel", "ToggleRadialMenu.pushbutton"))
 _LIB_DIR = os.path.abspath(os.path.join(_SCRIPT_DIR, "..", "..", "..", "lib"))
 if os.path.exists(_LIB_DIR) and _LIB_DIR not in sys.path:
     sys.path.insert(0, _LIB_DIR)
@@ -36,38 +37,6 @@ _active_open_delegates = []
 _delegate_lock = threading.Lock()
 _CACHED_REFLECTED_CLASSES = None
 _CACHED_CATEGORY_GROUPS = None
-
-def fast_toggle_icon(state):
-    try:
-        import System
-        from pyrevit import script, EXEC_PARAMS
-        import os
-        
-        cached_buttons = System.AppDomain.CurrentDomain.GetData("RadialMenu_UI_Buttons")
-        if not cached_buttons:
-            cached_buttons = script.get_all_buttons()
-            if cached_buttons:
-                System.AppDomain.CurrentDomain.SetData("RadialMenu_UI_Buttons", cached_buttons)
-        
-        if not cached_buttons:
-            return
-            
-        base_dir = EXEC_PARAMS.command_path
-        on_icon = os.path.join(base_dir, "on.png")
-        off_icon = os.path.join(base_dir, "off.png")
-        
-        target_icon = on_icon if state else off_icon
-        
-        for btn in cached_buttons:
-            if hasattr(btn, "set_icon") and os.path.exists(target_icon):
-                btn.set_icon(target_icon)
-    except Exception as ex:
-        try:
-            import traceback
-            with open(os.path.join(os.path.dirname(__file__), "RadialMenu_debug.log"), "a") as f:
-                f.write("Fast Toggle Error: " + str(ex) + "\n" + traceback.format_exc() + "\n")
-        except:
-            pass
 
 # Reference required .NET assemblies
 clr.AddReference("WindowsBase")
@@ -7950,16 +7919,8 @@ def hook_callback(nCode, wParam, lParam):
 # Hook manager wrapper class
 def get_main_thread_id():
     try:
-        import System.Diagnostics
-        hwnd = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle
-        if hwnd:
-            hwnd_val = hwnd.ToInt64()
-            user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
-            user32.GetWindowThreadProcessId.restype = ctypes.c_uint32
-            thread_id = user32.GetWindowThreadProcessId(hwnd_val, None)
-            if thread_id:
-                log_debug(u"Found Revit main window thread_id={} via HWND.".format(thread_id))
-                return thread_id
+        # Bypassed System.Diagnostics.Process.GetCurrentProcess() because it can cause multi-second hangs
+        pass
     except Exception as ex:
         log_debug(u"Failed to get thread_id via HWND: {}. Falling back to GetCurrentThreadId.".format(safe_str(ex)))
     
@@ -8080,60 +8041,3 @@ class RadialMenuManager(object):
         _ui_dispatcher = None
 
 # Execution & Toggle Logic
-if __name__ == "__main__":
-    from System.Windows.Input import Keyboard, ModifierKeys
-    is_shift = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift
-    
-    if is_shift:
-        log_debug(u"Shift-Click detected on Ribbon button. Launching customization mode directly.")
-        try:
-            # Customizer opens directly on the main thread (Ribbon button execution context is already main thread)
-            xaml_file = os.path.join(os.path.dirname(__file__), "ui.xaml")
-            win = RadialMenuWindow(xaml_file)
-            
-            # Set owner to Revit window
-            try:
-                from System.Windows.Interop import WindowInteropHelper
-                revit_window_handle = HOST_APP.proc_window
-                if revit_window_handle:
-                    helper = WindowInteropHelper(win)
-                    helper.Owner = revit_window_handle
-                    log_debug(u"Customizer Window Owner set to Revit MainWindowHandle successfully.")
-            except Exception as owner_ex:
-                log_debug(u"Failed to set Customizer Window Owner: {}".format(safe_str(owner_ex)))
-                
-            # Setup customizer panel and size
-            set_active_window(win)
-            win.setup_customizer_mode(show_window=True)
-            win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen
-            win.Show()
-            win.Activate()
-            log_debug(u"Customization Window shown and activated successfully.")
-        except Exception as ex:
-            forms.toast("Failed to open customizer: " + safe_str(ex), title="Radial Menu Error")
-    else:
-        existing_hook = System.AppDomain.CurrentDomain.GetData("RevitRadialMenuHook")
-        from pyrevit import script
-        if existing_hook:
-            try:
-                existing_hook.stop()
-            except:
-                pass
-            System.AppDomain.CurrentDomain.SetData("RevitRadialMenuHook", None)
-            try:
-                fast_toggle_icon(False)
-            except Exception as e_ico:
-                log_debug(u"Failed to toggle icon off: {}".format(safe_str(e_ico)))
-            forms.toast("Radial Menu has been disabled.", title="Radial Menu")
-        else:
-            try:
-                manager = RadialMenuManager()
-                manager.start()
-                System.AppDomain.CurrentDomain.SetData("RevitRadialMenuHook", manager)
-                try:
-                    fast_toggle_icon(True)
-                except Exception as e_ico:
-                    log_debug(u"Failed to toggle icon on: {}".format(safe_str(e_ico)))
-                forms.toast("Radial Menu enabled! Hold right-click to trigger. (Shift-click to configure)", title="Radial Menu")
-            except Exception as ex:
-                forms.toast("Failed to initialize: " + safe_str(ex), title="Radial Menu Error")

@@ -305,6 +305,7 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextAlignment" Value="Center"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
@@ -884,7 +885,7 @@
             </Button>
 
             <!-- ================= CORE BUTTONS (SETTINGS MODE) ================= -->
-            <Button Name="BtnCoreMove" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935" Visibility="Collapsed" ToolTip="Move Menu" Panel.ZIndex="100">
+            <Button Name="BtnCoreMove" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935" Visibility="Collapsed" ToolTip="Drag &amp; Drop" Panel.ZIndex="100">
                 <Canvas Width="640" Height="640">
                     <StackPanel Name="BtnCoreMovePanel" Width="50" Height="40" VerticalAlignment="Center">
                         <TextBlock Text="✥" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -1001,7 +1002,7 @@
                                     <TreeView.ItemContainerStyle>
                                         <Style TargetType="TreeViewItem">
                                             <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
-                                            <Setter Property="IsExpanded" Value="True"/>
+                                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
                                             <Setter Property="Background" Value="Transparent"/>
                                             <Setter Property="Padding" Value="0"/>
                                             <Setter Property="Margin" Value="0,1,0,1"/>
@@ -1177,8 +1178,34 @@
                                     </Button>
                                 </Grid>
                                 
-                                <!-- Exit / Reset -->
+                                <!-- Export / Import and Exit / Reset -->
                                 <StackPanel Grid.Row="3" Margin="0,2,0,0">
+                                    <Grid Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Name="BtnExportConfig" Grid.Column="0" Content="Export Config" Height="24" Margin="0,0,4,0"
+                                                Background="#FF0083B0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                        <Button Name="BtnImportConfig" Grid.Column="1" Content="Load Config" Height="24" Margin="4,0,0,0"
+                                                Background="#FF0083B0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </Grid>
                                     <Grid Margin="0,0,0,4">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
