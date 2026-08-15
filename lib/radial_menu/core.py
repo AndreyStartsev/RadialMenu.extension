@@ -456,8 +456,6 @@ def load_bitmap_image_themed(img_path):
     if not img_path:
         return None
     global _bitmap_image_cache
-    if img_path in _bitmap_image_cache:
-        return _bitmap_image_cache[img_path]
     try:
         abs_path = img_path
         if not os.path.isabs(abs_path):
@@ -468,27 +466,35 @@ def load_bitmap_image_themed(img_path):
             
         # Verify file size is not zero to prevent decoder crashes
         if os.path.getsize(abs_path) == 0:
-            log_debug(u"Warning: icon file is empty (0 bytes): {}".format(abs_path))
             return None
             
+        # Check modification time so modified icons update immediately
+        mtime = os.path.getmtime(abs_path)
+        if img_path in _bitmap_image_cache:
+            cached_mtime, cached_bi = _bitmap_image_cache[img_path]
+            if cached_mtime == mtime:
+                return cached_bi
+            
         from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption, BitmapCreateOptions
-        from System import Uri
+        from System.IO import FileStream, FileMode, FileAccess, FileShare
         
         bi = BitmapImage()
         bi.BeginInit()
-        bi.UriSource = Uri(abs_path)
         bi.CacheOption = BitmapCacheOption.OnLoad
-        bi.CreateOptions = getattr(BitmapCreateOptions, "None")
-        bi.EndInit()
+        bi.CreateOptions = BitmapCreateOptions.IgnoreImageCache
+        with FileStream(abs_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite) as fs:
+            bi.StreamSource = fs
+            bi.EndInit()
         
         try:
             bi.Freeze()
         except:
             pass
             
-        _bitmap_image_cache[img_path] = bi
+        _bitmap_image_cache[img_path] = (mtime, bi)
         return bi
-    except:
+    except Exception as ex:
+        log_debug(u"Failed to load bitmap {}: {}".format(img_path, safe_str(ex)))
         return None
 
 def clean_id_part(name):
@@ -775,6 +781,8 @@ def extract_icons_from_ribbon(force_overwrite=False, progress_callback=None, com
                 elif System.Windows.Application.Current:
                     System.Windows.Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Background, Action(process_batch))
             else:
+                global _bitmap_image_cache
+                _bitmap_image_cache.clear()
                 log_debug(u"Ribbon icon extraction complete: saved={}, skipped={}, failed={}.".format(
                     saved_count[0], skipped_count[0], failed_count[0]
                 ))
@@ -2430,6 +2438,8 @@ class RadialMenuWindow(Window):
         try:
             if force_reload or not hasattr(self, "_config_data") or not self._config_data:
                 self._config_data = load_config()
+                global _bitmap_image_cache
+                _bitmap_image_cache.clear()
             pool = self._config_data.get("command_pool", list(DEFAULT_POOL))
             
             # Apply context filtering only in normal mode.
