@@ -675,7 +675,7 @@ def save_wpf_image_to_png(img, file_path):
             pass
         return False
 
-def extract_icons_from_ribbon(force_overwrite=False, completion_callback=None):
+def extract_icons_from_ribbon(force_overwrite=False, progress_callback=None, completion_callback=None):
     try:
         import os
         clr.AddReference("AdWindows")
@@ -765,6 +765,9 @@ def extract_icons_from_ribbon(force_overwrite=False, completion_callback=None):
                 except:
                     failed_count[0] += 1
             idx_ref[0] = end_i
+
+            if progress_callback:
+                progress_callback(end_i, total_to_extract)
 
             if end_i < total_to_extract:
                 if _ui_dispatcher:
@@ -4140,9 +4143,9 @@ class RadialMenuWindow(Window):
 
     def on_extract_all_icons_clicked(self, sender, args):
         try:
-            from System.Windows import MessageBox, MessageBoxButton, MessageBoxImage
+            from System.Windows import MessageBox, MessageBoxButton, MessageBoxImage, Visibility
             
-            msg = u"Extract all Revit Ribbon icons for the active theme in the background?\nThis process runs asynchronously and will not freeze Revit."
+            msg = u"Extract all Revit Ribbon icons for the active theme in the background?\nThis process runs smoothly with live progress."
             if _IS_REVIT_DARK:
                 msg += u"\n\nActive theme: Dark (saving as *.dark.png)"
             else:
@@ -4155,11 +4158,42 @@ class RadialMenuWindow(Window):
                     btn.IsEnabled = False
                     btn.Content = "Extracting..."
                     
+                pnl = getattr(self, "ExtractProgressPanel", None)
+                pbar = getattr(self, "ExtractProgressBar", None)
+                txt_status = getattr(self, "ExtractStatusText", None)
+                txt_pct = getattr(self, "ExtractPercentText", None)
+                
+                if pnl:
+                    pnl.Visibility = Visibility.Visible
+                if pbar:
+                    pbar.Value = 0
+                if txt_pct:
+                    txt_pct.Text = "0%"
+                if txt_status:
+                    txt_status.Text = "Extracting ribbon icons..."
+                    
+                def on_progress(curr, total):
+                    def update_progress():
+                        pct = int(float(curr) / float(max(1, total)) * 100)
+                        if pbar:
+                            pbar.Value = pct
+                        if txt_pct:
+                            txt_pct.Text = u"{}% ({}/{})".format(pct, curr, total)
+                        if txt_status:
+                            txt_status.Text = u"Extracting {} of {}...".format(curr, total)
+                    try:
+                        from System import Action
+                        self.Dispatcher.BeginInvoke(Action(update_progress))
+                    except:
+                        pass
+
                 def on_done(saved, skipped, failed):
                     def update_ui():
                         if btn:
                             btn.IsEnabled = True
                             btn.Content = "Extract Ribbon Icons"
+                        if pnl:
+                            pnl.Visibility = Visibility.Collapsed
                         MessageBox.Show(u"Ribbon icons extraction completed!\n\nExtracted: {}\nSkipped (already cached): {}\nFailed: {}".format(saved, skipped, failed), "Success", MessageBoxButton.OK, MessageBoxImage.Information)
                     try:
                         from System import Action
@@ -4167,7 +4201,7 @@ class RadialMenuWindow(Window):
                     except:
                         pass
                         
-                extract_icons_from_ribbon(force_overwrite=True, completion_callback=on_done)
+                extract_icons_from_ribbon(force_overwrite=True, progress_callback=on_progress, completion_callback=on_done)
         except Exception as ex:
             log_debug("Error in on_extract_all_icons_clicked: " + str(ex))
 

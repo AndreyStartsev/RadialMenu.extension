@@ -1669,33 +1669,44 @@
                                 </StackPanel>
                             </ScrollViewer>
                             
-                            <!-- Exit Settings and Extract Icons Buttons -->
-                            <Grid Grid.Row="1" Margin="0,12,10,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Button Name="BtnExtractAllIcons" Grid.Column="0" Content="Extract Ribbon Icons" Height="24" Margin="0,0,5,0"
-                                        Background="#FF0083B0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
-                                    <Button.Template>
-                                        <ControlTemplate TargetType="Button">
-                                            <Border CornerRadius="4" Background="{TemplateBinding Background}">
-                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                        </ControlTemplate>
-                                    </Button.Template>
-                                </Button>
-                                <Button Name="BtnExitCustomizerLook" Grid.Column="1" Content="Exit Settings" Height="24" Margin="5,0,0,0"
-                                        Background="#FF55555C" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
-                                    <Button.Template>
-                                        <ControlTemplate TargetType="Button">
-                                            <Border CornerRadius="4" Background="{TemplateBinding Background}">
-                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                        </ControlTemplate>
-                                    </Button.Template>
-                                </Button>
-                            </Grid>
+                            <!-- Exit Settings, Progress Bar and Extract Icons Buttons -->
+                            <StackPanel Grid.Row="1" Margin="0,8,10,0">
+                                <!-- Progress Bar for Ribbon Icon Extraction -->
+                                <StackPanel Name="ExtractProgressPanel" Visibility="Collapsed" Margin="0,0,0,8">
+                                    <Grid Margin="0,0,0,4">
+                                        <TextBlock Name="ExtractStatusText" Text="Extracting ribbon icons..." Foreground="{DynamicResource CustomizerSecText}" FontSize="10" HorizontalAlignment="Left"/>
+                                        <TextBlock Name="ExtractPercentText" Text="0%" Foreground="{DynamicResource CustomizerHighlight}" FontSize="10" FontWeight="Bold" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    <ProgressBar Name="ExtractProgressBar" Height="4" Minimum="0" Maximum="100" Value="0" Background="#33FFFFFF" Foreground="{DynamicResource CustomizerHighlight}" BorderThickness="0"/>
+                                </StackPanel>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button Name="BtnExtractAllIcons" Grid.Column="0" Content="Extract Ribbon Icons" Height="24" Margin="0,0,5,0"
+                                            Background="#FF0083B0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                    <Button Name="BtnExitCustomizerLook" Grid.Column="1" Content="Exit Settings" Height="24" Margin="5,0,0,0"
+                                            Background="#FF55555C" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="10">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
                         </Grid>
                     </TabItem>
                     
