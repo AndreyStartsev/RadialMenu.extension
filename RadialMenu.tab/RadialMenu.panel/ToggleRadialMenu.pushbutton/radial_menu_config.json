@@ -2,11 +2,55 @@
     "command_pool": [
         {
             "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Sprinkler autotrace", 
-            "type": "pyrevit", 
-            "priority": 30, 
-            "name": "Sprinkler autotrace", 
+            "parent": null, 
+            "context_rules": {}, 
             "id": "item_1_05cc9bf3", 
-            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerautotrace.png", 
+            "type": "pyrevit", 
+            "level": 1, 
+            "priority": 40, 
+            "name": "Sprinkler autotrace", 
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerautotrace.png"
+        }, 
+        {
+            "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Sprinkler autotrace", 
+            "id": "item_2_cf9546fb", 
+            "parent": null, 
+            "context_rules": {}, 
+            "type": "pyrevit", 
+            "level": 1, 
+            "priority": 10, 
+            "name": "Sprinkler autotrace", 
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerautotrace.png"
+        }, 
+        {
+            "command": "CustomCtrl_CustomCtrl_ASToolsTestMatchElevation", 
+            "id": "item_2_38382e29", 
+            "parent": null, 
+            "context_rules": {}, 
+            "type": "pyrevit", 
+            "level": 1, 
+            "priority": 30, 
+            "name": "Match Elevation", 
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestMatchElevation.png"
+        }, 
+        {
+            "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Sprinkler heith", 
+            "type": "pyrevit", 
+            "priority": 20, 
+            "name": "Sprinkler heith", 
+            "id": "item_2_ffd3fa84", 
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerheith.dark.png", 
+            "level": 1, 
+            "parent": null, 
+            "context_rules": {}
+        }, 
+        {
+            "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Sprinkler heith", 
+            "type": "pyrevit", 
+            "priority": 50, 
+            "name": "Sprinkler heith", 
+            "id": "item_5_397440db", 
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerheith.dark.png", 
             "level": 1, 
             "parent": null, 
             "context_rules": {}

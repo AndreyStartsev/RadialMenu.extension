@@ -7321,57 +7321,92 @@ class RadialMenuWindow(Window):
                     import System.Windows.Media as media
                     
                     best_match = None
-                    while dep is not None:
-                        # Check both the DataContext and the visual element itself
+                    curr = dep
+                    visited = set()
+                    
+                    while curr is not None:
+                        curr_hash = getattr(curr, "GetHashCode", lambda: id(curr))()
+                        if curr_hash in visited:
+                            break
+                        visited.add(curr_hash)
+                        
+                        # Check DataContext, Item, Source, and the visual/logical element itself
                         candidates = []
-                        if hasattr(dep, "DataContext") and dep.DataContext:
-                            candidates.append(dep.DataContext)
-                        candidates.append(dep)
+                        if hasattr(curr, "DataContext") and curr.DataContext:
+                            candidates.append(curr.DataContext)
+                        if hasattr(curr, "Item") and curr.Item:
+                            candidates.append(curr.Item)
+                        if hasattr(curr, "Source") and curr.Source:
+                            candidates.append(curr.Source)
+                        candidates.append(curr)
                         
                         for candidate in candidates:
+                            if not candidate:
+                                continue
                             try:
                                 c_type = candidate.GetType()
-                                c_type_name = c_type.FullName
+                                c_type_name = c_type.FullName or c_type.Name or ""
                                 c_ns = c_type.Namespace or ""
-                                if "Autodesk.Windows" in c_ns:
+                                
+                                c_id = getattr(candidate, "Id", None) or getattr(candidate, "CommandId", None) or getattr(candidate, "Name", None)
+                                if c_id and str(c_id).strip():
+                                    c_id_str = str(c_id).strip()
                                     is_pulldown = (
                                         "RibbonSplitButton" in c_type_name 
                                         or "RibbonListButton" in c_type_name 
                                         or "RibbonGallery" in c_type_name
+                                        or "RibbonMenu" in c_type_name
                                     )
                                     is_btn = (
                                         "RibbonButton" in c_type_name 
                                         or "RibbonCommandItem" in c_type_name 
                                         or "RibbonItem" in c_type_name
+                                        or "RibbonToggleButton" in c_type_name
+                                        or "RibbonRadioButton" in c_type_name
+                                        or "RibbonMenuItem" in c_type_name
+                                        or "RibbonCombo" in c_type_name
+                                        or "RibbonTextBox" in c_type_name
+                                        or "Button" in c_type_name
+                                        or "Item" in c_type_name
+                                        or "Autodesk.Windows" in c_ns
+                                        or c_id_str.startswith("ID_")
+                                        or c_id_str.startswith("CustomCtrl")
                                     )
-                                    if (is_pulldown or is_btn) and getattr(candidate, "Id", None):
-                                        if is_pulldown:
-                                            best_match = candidate
-                                            break  # Found the container, stop looking at this element's candidates
-                                        elif best_match is None:
+                                    if is_btn or is_pulldown:
+                                        if best_match is None:
                                             best_match = candidate
                             except Exception as c_ex:
                                 log_debug("Candidate check failed: " + str(c_ex))
                                 pass
                                 
-                        # If we found a pulldown container, we can stop traversing higher up the visual tree
                         if best_match:
-                            bm_type_name = best_match.GetType().Name
-                            if "RibbonSplitButton" in bm_type_name or "RibbonListButton" in bm_type_name or "RibbonGallery" in bm_type_name:
-                                break
-                                
-                        if isinstance(dep, media.Visual) or hasattr(media.VisualTreeHelper, "GetParent"):
-                            try:
-                                dep = media.VisualTreeHelper.GetParent(dep)
-                            except Exception as tree_ex:
-                                log_debug("GetParent failed: " + str(tree_ex))
-                                break
-                        else:
                             break
+                            
+                        # Move up visual or logical tree
+                        parent = None
+                        if isinstance(curr, media.Visual):
+                            try:
+                                parent = media.VisualTreeHelper.GetParent(curr)
+                            except:
+                                pass
+                                
+                        if not parent:
+                            try:
+                                from System.Windows import LogicalTreeHelper, FrameworkElement, FrameworkContentElement
+                                if isinstance(curr, FrameworkElement):
+                                    parent = curr.Parent or getattr(curr, "TemplatedParent", None)
+                                elif isinstance(curr, FrameworkContentElement):
+                                    parent = curr.Parent or getattr(curr, "TemplatedParent", None)
+                                if not parent:
+                                    parent = LogicalTreeHelper.GetParent(curr)
+                            except:
+                                pass
+                        curr = parent
                             
                     if best_match:
                         self._ribbon_dragged_item = best_match
-                        log_debug("Found Ribbon Item! Id={}, Type={}".format(best_match.Id, best_match.GetType().Name))
+                        match_id = getattr(best_match, "Id", None) or getattr(best_match, "CommandId", None) or getattr(best_match, "Name", "")
+                        log_debug("Found Ribbon Item! Id={}, Type={}".format(match_id, best_match.GetType().Name))
                             
             # Check for mouse move
             elif isinstance(e, MouseEventArgs) and e.RoutedEvent and e.RoutedEvent.Name == "PreviewMouseMove":
@@ -7395,15 +7430,25 @@ class RadialMenuWindow(Window):
                     item = self._ribbon_dragged_item
                     self._ribbon_dragged_item = None # Reset immediately to prevent multiple triggers
                     
-                    item_id = getattr(item, "Id", None)
+                    item_id = getattr(item, "Id", None) or getattr(item, "CommandId", None) or getattr(item, "Name", None)
                     if not item_id:
                         return
+                    item_id = str(item_id).strip()
                         
                     # Mark the event as Handled so Revit doesn't also process mouse movement (e.g. dragging panels)
                     e.Handled = True
                     
-                    item_text = getattr(item, "Text", "Command")
-                    item_name = item_text.replace("\n", " ").replace("\r", " ").strip()
+                    item_text = (
+                        getattr(item, "Text", None) 
+                        or getattr(item, "Name", None) 
+                        or getattr(item, "Title", None) 
+                        or getattr(item, "ToolTip", None) 
+                        or item_id
+                    )
+                    try:
+                        item_name = str(item_text).replace("\n", " ").replace("\r", " ").strip()
+                    except:
+                        item_name = "Command"
                     
                     is_pyrevit = "customctrl_%customctrl_%" in item_id.lower()
                     pyrevit_unique_id = None
@@ -7421,10 +7466,13 @@ class RadialMenuWindow(Window):
                     
                     # Helper to save Ribbon item icon on-the-fly
                     def save_item_icon(r_item):
-                        if not r_item or not getattr(r_item, "Id", None):
+                        if not r_item:
                             return ""
-                        r_id = r_item.Id
-                        safe_fn = "".join([c for c in r_id if c.isalnum() or c in ("_", "-")]).strip()
+                        r_id = getattr(r_item, "Id", None) or getattr(r_item, "CommandId", None) or getattr(r_item, "Name", None)
+                        if not r_id:
+                            return ""
+                        r_id_str = str(r_id).strip()
+                        safe_fn = "".join([c for c in r_id_str if c.isalnum() or c in ("_", "-")]).strip()
                         if not safe_fn:
                             return ""
                             
@@ -7441,37 +7489,33 @@ class RadialMenuWindow(Window):
                         file_path = os.path.join(icons_dir, safe_fn + suffix)
                         
                         if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
-                            img = None
-                            if hasattr(r_item, "LargeImage") and r_item.LargeImage:
-                                img = r_item.LargeImage
-                            elif hasattr(r_item, "Image") and r_item.Image:
-                                img = r_item.Image
-                                
+                            img = getattr(r_item, "LargeImage", None) or getattr(r_item, "Image", None) or getattr(r_item, "SmallImage", None)
                             if img:
                                 save_wpf_image_to_png(img, file_path)
                         return file_path if os.path.exists(file_path) else ""
 
                     is_pulldown = False
                     ctx_type_name = item.GetType().Name
-                    if "RibbonListButton" in ctx_type_name or "RibbonSplitButton" in ctx_type_name or "RibbonGallery" in ctx_type_name:
-                        is_pulldown = True
+                    if "RibbonListButton" in ctx_type_name or "RibbonSplitButton" in ctx_type_name or "RibbonGallery" in ctx_type_name or "RibbonMenu" in ctx_type_name:
+                        if hasattr(item, "Items") and item.Items and len(list(item.Items)) > 0:
+                            is_pulldown = True
                         
                     children_list = []
                     if is_pulldown:
                         try:
                             if hasattr(item, "Items") and item.Items:
                                 for child in item.Items:
-                                    child_id = getattr(child, "Id", None)
+                                    child_id = getattr(child, "Id", None) or getattr(child, "CommandId", None) or getattr(child, "Name", None)
                                     if child_id:
                                         child_text = getattr(child, "Text", "") or getattr(child, "Name", "") or "Command"
-                                        child_name = child_text.replace("\n", " ").replace("\r", " ").strip()
+                                        child_name = str(child_text).replace("\n", " ").replace("\r", " ").strip()
                                         
                                         # Save and resolve icon
                                         child_icon = save_item_icon(child)
                                         
                                         children_list.append({
                                             "name": child_name,
-                                            "unique_id": child_id,
+                                            "unique_id": str(child_id),
                                             "icon_path": child_icon
                                         })
                         except Exception as child_ex:
