@@ -476,15 +476,18 @@ def load_bitmap_image_themed(img_path):
                 return cached_bi
             
         from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption, BitmapCreateOptions
-        from System.IO import FileStream, FileMode, FileAccess, FileShare
+        from System.IO import File, MemoryStream
+        
+        # Read all bytes into a MemoryStream to prevent file locking and ensure WPF has full data
+        bytes_data = File.ReadAllBytes(abs_path)
+        ms = MemoryStream(bytes_data)
         
         bi = BitmapImage()
         bi.BeginInit()
         bi.CacheOption = BitmapCacheOption.OnLoad
         bi.CreateOptions = BitmapCreateOptions.IgnoreImageCache
-        with FileStream(abs_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite) as fs:
-            bi.StreamSource = fs
-            bi.EndInit()
+        bi.StreamSource = ms
+        bi.EndInit()
         
         try:
             bi.Freeze()

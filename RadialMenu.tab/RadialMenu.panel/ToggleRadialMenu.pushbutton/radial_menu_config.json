@@ -1,23 +1,34 @@
 {
     "command_pool": [
         {
-            "command": "CustomCtrl_CustomCtrl_ASToolsTestMatchElevation", 
-            "parent": null, 
-            "context_rules": {}, 
-            "id": "item_2_38382e29", 
-            "type": "pyrevit", 
-            "level": 1, 
-            "priority": 20, 
-            "name": "Match Elevation", 
-            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestMatchElevation.png"
-        }, 
-        {
             "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Sprinkler heith", 
             "type": "pyrevit", 
-            "priority": 10, 
+            "priority": 20, 
             "name": "Sprinkler heith", 
-            "id": "item_1_7cdd64c7", 
+            "id": "item_1_4e3cc7f6", 
             "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerheith.dark.png", 
+            "level": 1, 
+            "parent": null, 
+            "context_rules": {}
+        }, 
+        {
+            "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Sprinkler autosize", 
+            "type": "pyrevit", 
+            "priority": 10, 
+            "name": "Sprinkler Pipe Automatic Sizing", 
+            "id": "item_1_e9b69607", 
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerautosize.dark.png", 
+            "level": 1, 
+            "parent": null, 
+            "context_rules": {}
+        }, 
+        {
+            "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Test Dim", 
+            "type": "pyrevit", 
+            "priority": 30, 
+            "name": "Test Dim", 
+            "id": "item_3_b23e2f52", 
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestTestDim.dark.png", 
             "level": 1, 
             "parent": null, 
             "context_rules": {}
