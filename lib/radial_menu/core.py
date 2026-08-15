@@ -655,8 +655,12 @@ def save_wpf_image_to_png(img, file_path):
 
         rtb = RenderTargetBitmap(w, h, 96, 96, System.Windows.Media.PixelFormats.Pbgra32)
         dv = DrawingVisual()
-        with dv.RenderOpen() as dc:
+        dc = dv.RenderOpen()
+        try:
             dc.DrawImage(img, Rect(0, 0, w, h))
+        finally:
+            dc.Close()
+            
         rtb.Render(dv)
 
         encoder = PngBitmapEncoder()
@@ -672,84 +676,116 @@ def save_wpf_image_to_png(img, file_path):
         return False
 
 def extract_icons_from_ribbon(force_overwrite=False, completion_callback=None):
-    def worker():
-        try:
-            import os
-            clr.AddReference("AdWindows")
-            import Autodesk.Windows as adWin
+    try:
+        import os
+        clr.AddReference("AdWindows")
+        import Autodesk.Windows as adWin
+        from System.Windows.Threading import DispatcherPriority
+        from System import Action
+        
+        icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
+        if not os.path.exists(icons_dir):
+            try:
+                os.makedirs(icons_dir)
+            except:
+                pass
             
-            icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
-            if not os.path.exists(icons_dir):
-                try:
-                    os.makedirs(icons_dir)
-                except:
-                    pass
-                
-            saved_count = [0]
-            skipped_count = [0]
-            failed_count = [0]
-            seen_ids = set()
-            
-            global _IS_REVIT_DARK
-            suffix = ".dark.png" if _IS_REVIT_DARK else ".png"
-            
-            log_debug(u"Starting background ribbon icon extraction...")
-            ribbon_ctrl = getattr(adWin.ComponentManager, "Ribbon", None)
-            items_to_process = []
-            if ribbon_ctrl and getattr(ribbon_ctrl, "Tabs", None):
-                for tab in ribbon_ctrl.Tabs:
-                    if getattr(tab, "Panels", None):
-                        for panel in tab.Panels:
-                            if panel.Source and getattr(panel.Source, "Items", None):
-                                for item in panel.Source.Items:
-                                    items_to_process.append(item)
+        saved_count = [0]
+        skipped_count = [0]
+        failed_count = [0]
+        seen_ids = set()
+        
+        global _IS_REVIT_DARK
+        suffix = ".dark.png" if _IS_REVIT_DARK else ".png"
+        
+        log_debug(u"Starting ribbon icon extraction on UI thread...")
+        ribbon_ctrl = getattr(adWin.ComponentManager, "Ribbon", None)
+        items_queue = []
+        
+        def collect_recursive(itm):
+            if not itm:
+                return
+            try:
+                r_id = getattr(itm, "Id", None) or getattr(itm, "Name", None)
+                if r_id:
+                    r_id_str = str(r_id).strip()
+                    if r_id_str and r_id_str not in seen_ids:
+                        seen_ids.add(r_id_str)
+                        safe_fn = "".join([c for c in r_id_str if c.isalnum() or c in ("_", "-")]).strip()
+                        if safe_fn:
+                            file_path = os.path.join(icons_dir, safe_fn + suffix)
+                            if not force_overwrite and os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+                                skipped_count[0] += 1
+                            else:
+                                img = getattr(itm, "LargeImage", None) or getattr(itm, "Image", None) or getattr(itm, "SmallImage", None)
+                                if img:
+                                    items_queue.append((file_path, img))
                                     
-            def process_item_recursive(itm):
-                if not itm:
-                    return
+                # Recursively check all potential children collections
+                for child_prop in ["Items", "Panels", "Children", "Elements", "SubItems"]:
+                    try:
+                        coll = getattr(itm, child_prop, None)
+                        if coll:
+                            for sub in coll:
+                                collect_recursive(sub)
+                    except:
+                        pass
+            except:
+                pass
+
+        if ribbon_ctrl and getattr(ribbon_ctrl, "Tabs", None):
+            for tab in ribbon_ctrl.Tabs:
+                if getattr(tab, "Panels", None):
+                    for panel in tab.Panels:
+                        collect_recursive(panel)
+                        if getattr(panel, "Source", None):
+                            collect_recursive(panel.Source)
+
+        total_to_extract = len(items_queue)
+        log_debug(u"Collected {} ribbon icons to process (skipped existing: {}).".format(total_to_extract, skipped_count[0]))
+
+        if total_to_extract == 0:
+            if completion_callback:
+                completion_callback(0, skipped_count[0], 0)
+            return
+
+        chunk_size = 25
+        idx_ref = [0]
+
+        def process_batch():
+            start_i = idx_ref[0]
+            end_i = min(start_i + chunk_size, total_to_extract)
+            for i in range(start_i, end_i):
+                fpath, img = items_queue[i]
                 try:
-                    if hasattr(itm, "Id") and itm.Id:
-                        r_id = str(itm.Id)
-                        if r_id not in seen_ids:
-                            seen_ids.add(r_id)
-                            safe_fn = "".join([c for c in r_id if c.isalnum() or c in ("_", "-")]).strip()
-                            if safe_fn:
-                                file_path = os.path.join(icons_dir, safe_fn + suffix)
-                                if not force_overwrite and os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-                                    skipped_count[0] += 1
-                                else:
-                                    img = None
-                                    if hasattr(itm, "LargeImage") and itm.LargeImage:
-                                        img = itm.LargeImage
-                                    elif hasattr(itm, "Image") and itm.Image:
-                                        img = itm.Image
-                                    if img:
-                                        if save_wpf_image_to_png(img, file_path):
-                                            saved_count[0] += 1
-                                        else:
-                                            failed_count[0] += 1
-                    if hasattr(itm, "Items") and itm.Items:
-                        for sub_itm in itm.Items:
-                            process_item_recursive(sub_itm)
+                    if save_wpf_image_to_png(img, fpath):
+                        saved_count[0] += 1
+                    else:
+                        failed_count[0] += 1
                 except:
-                    pass
+                    failed_count[0] += 1
+            idx_ref[0] = end_i
 
-            for itm in items_to_process:
-                process_item_recursive(itm)
+            if end_i < total_to_extract:
+                if _ui_dispatcher:
+                    _ui_dispatcher.BeginInvoke(DispatcherPriority.Background, Action(process_batch))
+                elif System.Windows.Application.Current:
+                    System.Windows.Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Background, Action(process_batch))
+            else:
+                log_debug(u"Ribbon icon extraction complete: saved={}, skipped={}, failed={}.".format(
+                    saved_count[0], skipped_count[0], failed_count[0]
+                ))
+                if completion_callback:
+                    completion_callback(saved_count[0], skipped_count[0], failed_count[0])
 
-            log_debug(u"Background ribbon icon extraction finished: saved={}, skipped={}, failed={}.".format(
-                saved_count[0], skipped_count[0], failed_count[0]
-            ))
-            if completion_callback:
-                completion_callback(saved_count[0], skipped_count[0], failed_count[0])
-        except Exception as ex:
-            log_debug(u"Error in background ribbon extraction: {}".format(safe_str(ex)))
-            if completion_callback:
-                completion_callback(0, 0, 0)
-                
-    t = threading.Thread(target=worker)
-    t.daemon = True
-    t.start()
+        if _ui_dispatcher:
+            _ui_dispatcher.BeginInvoke(DispatcherPriority.Background, Action(process_batch))
+        elif System.Windows.Application.Current:
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Background, Action(process_batch))
+    except Exception as ex:
+        log_debug(u"Error in extract_icons_from_ribbon: {}".format(safe_str(ex)))
+        if completion_callback:
+            completion_callback(0, 0, 0)
 
 def check_and_suggest_icon_extraction(window):
     # Left as a no-op to prevent blocking startup popups
