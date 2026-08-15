@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 __persistentengine__ = True
+__lightweightscopes__ = False
+
 
 import os
 import sys
@@ -11,8 +13,7 @@ import threading
 import json
 
 # Ensure lib directory is on sys.path
-_CORE_DIR = os.path.dirname(__file__)
-_SCRIPT_DIR = os.path.normpath(os.path.join(_CORE_DIR, "..", "..", "..", "RadialMenu.tab", "RadialMenu.panel", "ToggleRadialMenu.pushbutton"))
+_SCRIPT_DIR = os.path.dirname(__file__)
 _LIB_DIR = os.path.abspath(os.path.join(_SCRIPT_DIR, "..", "..", "..", "lib"))
 if os.path.exists(_LIB_DIR) and _LIB_DIR not in sys.path:
     sys.path.insert(0, _LIB_DIR)
@@ -37,6 +38,38 @@ _active_open_delegates = []
 _delegate_lock = threading.Lock()
 _CACHED_REFLECTED_CLASSES = None
 _CACHED_CATEGORY_GROUPS = None
+
+def fast_toggle_icon(state):
+    try:
+        import System
+        from pyrevit import script, EXEC_PARAMS
+        import os
+        
+        cached_buttons = System.AppDomain.CurrentDomain.GetData("RadialMenu_UI_Buttons")
+        if not cached_buttons:
+            cached_buttons = script.get_all_buttons()
+            if cached_buttons:
+                System.AppDomain.CurrentDomain.SetData("RadialMenu_UI_Buttons", cached_buttons)
+        
+        if not cached_buttons:
+            return
+            
+        base_dir = EXEC_PARAMS.command_path
+        on_icon = os.path.join(base_dir, "on.png")
+        off_icon = os.path.join(base_dir, "off.png")
+        
+        target_icon = on_icon if state else off_icon
+        
+        for btn in cached_buttons:
+            if hasattr(btn, "set_icon") and os.path.exists(target_icon):
+                btn.set_icon(target_icon)
+    except Exception as ex:
+        try:
+            import traceback
+            with open(os.path.join(os.path.dirname(__file__), "RadialMenu_debug.log"), "a") as f:
+                f.write("Fast Toggle Error: " + str(ex) + "\n" + traceback.format_exc() + "\n")
+        except:
+            pass
 
 # Reference required .NET assemblies
 clr.AddReference("WindowsBase")
@@ -254,11 +287,13 @@ def log_debug(msg):
         pass
 
 DEFAULT_SETTINGS = {
-    "hold_delay_ms": 400,
+    "hold_delay_ms": 200,
     "trigger_mode": "hold",
+    "enable_gestures": True,
+    "gesture_threshold": 35,
     "use_circles": False,
     "animation_style": "fade",
-    "enable_logging": True,
+    "enable_logging": False,
     "gap_width": 3.0,
     "core_radius": 45,
     "petal_width": 60,
@@ -415,19 +450,25 @@ def resolve_themed_icon(icon_path):
                     return light_path
     return icon_path
 
+_bitmap_image_cache = {}
+
 def load_bitmap_image_themed(img_path):
     if not img_path:
         return None
+    global _bitmap_image_cache
+    if img_path in _bitmap_image_cache:
+        return _bitmap_image_cache[img_path]
     try:
-        if not os.path.isabs(img_path):
-            img_path = os.path.join(os.path.dirname(__file__), img_path)
+        abs_path = img_path
+        if not os.path.isabs(abs_path):
+            abs_path = os.path.join(os.path.dirname(__file__), abs_path)
             
-        if not os.path.exists(img_path):
+        if not os.path.exists(abs_path):
             return None
             
         # Verify file size is not zero to prevent decoder crashes
-        if os.path.getsize(img_path) == 0:
-            log_debug(u"Warning: icon file is empty (0 bytes): {}".format(img_path))
+        if os.path.getsize(abs_path) == 0:
+            log_debug(u"Warning: icon file is empty (0 bytes): {}".format(abs_path))
             return None
             
         from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption, BitmapCreateOptions
@@ -435,7 +476,7 @@ def load_bitmap_image_themed(img_path):
         
         bi = BitmapImage()
         bi.BeginInit()
-        bi.UriSource = Uri(img_path)
+        bi.UriSource = Uri(abs_path)
         bi.CacheOption = BitmapCacheOption.OnLoad
         bi.CreateOptions = getattr(BitmapCreateOptions, "None")
         bi.EndInit()
@@ -445,6 +486,7 @@ def load_bitmap_image_themed(img_path):
         except:
             pass
             
+        _bitmap_image_cache[img_path] = bi
         return bi
     except:
         return None
@@ -998,6 +1040,72 @@ def get_current_selection_state():
 # Thread safety lock and identifier counter for hold detection
 _hold_lock = threading.Lock()
 _hold_id_counter = 0
+_enable_gestures = True
+_gesture_threshold = 35.0
+_gesture_flick_detected = False
+_gesture_target_item = None
+
+def resolve_gesture_command_at_point(start_x, start_y, curr_x, curr_y):
+    try:
+        import math
+        dx = float(curr_x - start_x)
+        dy = float(curr_y - start_y)
+        dist = math.sqrt(dx * dx + dy * dy)
+        if dist < 25.0:
+            return None
+            
+        # Screen angle: 0=East, 90=South, 180=West, 270=North
+        mouse_angle = (math.degrees(math.atan2(dy, dx)) + 360.0) % 360.0
+        
+        # 1. Try active window's filtered items if window exists
+        active_win = get_active_window()
+        l1_items = []
+        if active_win and hasattr(active_win, "_level_items"):
+            l1_items = active_win._level_items.get(1, [])
+            
+        # 2. If no active window or empty, load matching layout for current Revit context
+        if not l1_items:
+            cfg = load_config()
+            pool = cfg.get("command_pool", list(DEFAULT_POOL))
+            view_cat = "Plan"
+            try:
+                uiapp = HOST_APP.uiapp
+                if uiapp and uiapp.ActiveUIDocument and uiapp.ActiveUIDocument.ActiveView:
+                    from Autodesk.Revit.DB import ViewType
+                    vt = uiapp.ActiveUIDocument.ActiveView.ViewType
+                    if vt in [ViewType.ThreeD]:
+                        view_cat = "3D"
+                    elif vt in [ViewType.DrawingSheet]:
+                        view_cat = "Sheet"
+            except:
+                pass
+                
+            sel_state = get_current_selection_state()
+            for item in pool:
+                if item.get("level", 1) == 1:
+                    rules = item.get("context_rules", {})
+                    if rules:
+                        av = rules.get("allowed_views", [])
+                        if av and view_cat not in av:
+                            continue
+                        as_states = rules.get("allowed_selection_states", [])
+                        if as_states and sel_state not in as_states:
+                            continue
+                    l1_items.append(item)
+                    
+        n1 = len(l1_items)
+        if n1 == 0:
+            return None
+            
+        span = 360.0 / float(n1)
+        # Level 1 items are centered starting with Item 1 at 270 degrees (North / Top)
+        rel_angle = (mouse_angle - 270.0 + (span / 2.0)) % 360.0
+        idx = int(rel_angle / span)
+        if 0 <= idx < n1:
+            return l1_items[idx]
+    except:
+        pass
+    return None
 
 def hold_detection_worker(hold_id, start_x, start_y):
     global _is_holding, _menu_opened_by_hold, _hold_delay_ms
@@ -2723,7 +2831,6 @@ class RadialMenuWindow(Window):
                 cust_win.Closing += lambda s, e: self.on_customizer_window_closing(s, e)
                 
                 # Position next to the radial menu safely
-                import System
                 import System.Windows.Forms as winforms
                 from System.Windows import SystemParameters
                 
@@ -2800,6 +2907,10 @@ class RadialMenuWindow(Window):
                 # Wire up enable logging checkbox
                 self.EnableLoggingCheckBox.Checked += self.on_appearance_setting_changed
                 self.EnableLoggingCheckBox.Unchecked += self.on_appearance_setting_changed
+                # Wire up enable gestures checkbox
+                if hasattr(self, "EnableGesturesCheckBox") and self.EnableGesturesCheckBox:
+                    self.EnableGesturesCheckBox.Checked += self.on_appearance_setting_changed
+                    self.EnableGesturesCheckBox.Unchecked += self.on_appearance_setting_changed
                 # Wire up animation style combo
                 self.AnimationStyleComboBox.SelectionChanged += self.on_animation_style_changed
                 # Wire up appearance sliders
@@ -3606,6 +3717,10 @@ class RadialMenuWindow(Window):
             
             settings["use_circles"] = bool(self.UseCirclesCheckBox.IsChecked)
             settings["enable_logging"] = bool(self.EnableLoggingCheckBox.IsChecked)
+            if hasattr(self, "EnableGesturesCheckBox") and self.EnableGesturesCheckBox:
+                settings["enable_gestures"] = bool(self.EnableGesturesCheckBox.IsChecked)
+                global _enable_gestures
+                _enable_gestures = settings["enable_gestures"]
             
             settings["hold_delay_ms"] = int(self.DelaySlider.Value)
             self.DelayValueText.Text = u"{} ms".format(settings["hold_delay_ms"])
@@ -3780,6 +3895,8 @@ class RadialMenuWindow(Window):
             
             self.UseCirclesCheckBox.IsChecked = bool(settings.get("use_circles", False))
             self.EnableLoggingCheckBox.IsChecked = bool(settings.get("enable_logging", False))
+            if hasattr(self, "EnableGesturesCheckBox") and self.EnableGesturesCheckBox:
+                self.EnableGesturesCheckBox.IsChecked = bool(settings.get("enable_gestures", True))
             
             anim_style = settings.get("animation_style", "fade")
             anim_mapping = {"fade": 0, "pop": 1, "fan": 2}
@@ -5789,7 +5906,7 @@ class RadialMenuWindow(Window):
             log_debug(u"Error in on_petal_mouse_up: {}".format(safe_str(ex)))
             args.Handled = True
 
-    def find_all_commands_safe(self):
+    def find_all_commands_safe(self, preloaded_sessionmgr_cmds=None):
         global _cached_commands
         with _cached_commands_lock:
             if _cached_commands is not None:
@@ -5802,16 +5919,19 @@ class RadialMenuWindow(Window):
         
         # 1. Try to load from sessionmgr
         try:
-            from pyrevit.loader import sessionmgr
-            all_cmds = sessionmgr.find_all_commands(cache=True)
-            log_debug(u"Found {} commands via sessionmgr.".format(len(all_cmds)))
-            for cmd in all_cmds:
-                uid = getattr(cmd, "unique_id", None)
-                if uid:
-                    if uid.lower() in unique_ids:
-                        continue
-                    cmds.append(cmd)
-                    unique_ids.add(uid.lower())
+            all_cmds = preloaded_sessionmgr_cmds
+            if all_cmds is None:
+                from pyrevit.loader import sessionmgr
+                all_cmds = sessionmgr.find_all_commands(cache=True)
+            log_debug(u"Found {} commands via sessionmgr.".format(len(all_cmds) if all_cmds else 0))
+            if all_cmds:
+                for cmd in all_cmds:
+                    uid = getattr(cmd, "unique_id", None)
+                    if uid:
+                        if uid.lower() in unique_ids:
+                            continue
+                        cmds.append(cmd)
+                        unique_ids.add(uid.lower())
         except Exception as ex:
             log_debug(u"Default find_all_commands failed ({}).".format(safe_str(ex)))
             
@@ -5907,14 +6027,22 @@ class RadialMenuWindow(Window):
             self._ribbon_commands = []
             log_debug(u"Error pre-loading Ribbon commands: {}".format(safe_str(ex)))
             
+        sessionmgr_cmds = []
+        try:
+            from pyrevit.loader import sessionmgr
+            sessionmgr_cmds = list(sessionmgr.find_all_commands(cache=True))
+            log_debug(u"Pre-loaded {} commands via sessionmgr on UI thread.".format(len(sessionmgr_cmds)))
+        except Exception as e_sm:
+            log_debug(u"Failed to pre-load sessionmgr commands on UI thread: {}".format(safe_str(e_sm)))
+            
         self._commands_worker_dispatcher = self.Dispatcher
-        t = threading.Thread(target=self._async_load_commands_worker)
+        t = threading.Thread(target=self._async_load_commands_worker, args=(sessionmgr_cmds,))
         t.daemon = True
         t.start()
 
-    def _async_load_commands_worker(self):
+    def _async_load_commands_worker(self, preloaded_sessionmgr_cmds=None):
         try:
-            all_cmds = self.find_all_commands_safe()
+            all_cmds = self.find_all_commands_safe(preloaded_sessionmgr_cmds)
             
             parsed_list = []
             seen_uids = set()
@@ -7359,72 +7487,73 @@ class RadialMenuWindow(Window):
                     self.toggle_level3()
                 return
                 
-            self._is_closing = True
-            log_debug(u"RadialMenuWindow slot {} clicked. Command: {}".format(slot_num, cmd_value))
+    def hide_radial_menu(self):
+        if getattr(self, "customizer_mode", False):
+            return
+        try:
+            from System.Windows import Visibility
+            self.Visibility = Visibility.Hidden
+            self._is_closing = False
+        except:
+            pass
+
+    def on_slot_clicked(self, slot_num):
+        if self._is_closing:
+            return
             
-            try:
-                self.Deactivated -= self.on_deactivated
-                self.KeyDown -= self.on_key_down
-            except:
-                pass
+        if self.customizer_mode:
+            return
+            
+        # Find the pool item associated with this slot via button name
+        btn_name = SLOT_BUTTONS.get(slot_num)
+        pool_item = getattr(self, "_button_to_pool_item", {}).get(btn_name)
+        
+        if not pool_item:
+            # Fallback: try reverse lookup
+            for bname, item in getattr(self, "_button_to_pool_item", {}).items():
+                if self._button_to_slot_map.get(bname) == slot_num:
+                    pool_item = item
+                    break
                 
-            self.Close()
+        if pool_item:
+            cmd_type = pool_item.get("type")
+            cmd_value = pool_item.get("command")
+            
+            if cmd_value == "empty":
+                log_debug(u"Clicked empty slot {}. Doing nothing.".format(slot_num))
+                return
+            
+            # Submenu triggers
+            if cmd_value in ["submenu1", "submenu2"]:
+                button_level = pool_item.get("level", 1)
+                if button_level == 1:
+                    self.toggle_level2()
+                elif button_level == 2:
+                    self.toggle_level3()
+                return
+                
+            log_debug(u"RadialMenuWindow slot {} clicked. Command: {}".format(slot_num, cmd_value))
+            self.hide_radial_menu()
             
             if _event_handler and _ext_event:
                 _event_handler.set_action(execute_command, cmd_type, cmd_value)
                 _ext_event.Raise()
 
     def on_deactivated(self, sender, args):
-        if self._is_closing:
-            return
         if self.customizer_mode:
             return
         if self.IsMouseOver:
             log_debug(u"Window deactivated but mouse is over window. Ignoring close.")
             return
-        self._is_closing = True
-        
-        # Smart focus check: if an active window exists, we rely on WPF's native
-        # owner window activation when closing, rather than calling SetForegroundWindow (which can fail and cause focus jumps).
-        try:
-            active_hwnd = user32.GetForegroundWindow()
-            if not active_hwnd or active_hwnd == 0:
-                self._restore_revit_focus = True
-                log_debug(u"Deactivated: no active window. Focus restore enabled.")
-            else:
-                self._restore_revit_focus = False
-                log_debug(u"Deactivated: active window exists. Relying on native OS focus reactivation.")
-        except Exception as ex:
-            log_debug(u"Error in focus check on deactivation: {}".format(safe_str(ex)))
-            self._restore_revit_focus = False
-            
-        log_debug(u"RadialMenuWindow deactivated (clicked outside). Closing.")
-        
-        if self._restore_revit_focus:
-            self.restore_revit_focus()
-            
-        try:
-            self.Deactivated -= self.on_deactivated
-            self.KeyDown -= self.on_key_down
-        except:
-            pass
-            
-        self.Close()
+        log_debug(u"RadialMenuWindow deactivated (clicked outside). Hiding.")
+        self.hide_radial_menu()
 
     def on_key_down(self, sender, args):
         if args.Key == wpf_input.Key.Escape:
-            if self._is_closing:
+            if self.customizer_mode:
                 return
-            self._is_closing = True
-            log_debug(u"RadialMenuWindow Escape pressed. Closing.")
-            
-            try:
-                self.Deactivated -= self.on_deactivated
-                self.KeyDown -= self.on_key_down
-            except:
-                pass
-                
-            self.Close()
+            log_debug(u"RadialMenuWindow Escape pressed. Hiding.")
+            self.hide_radial_menu()
 
     def on_close_request(self):
         if self._is_closing:
@@ -7704,72 +7833,71 @@ def get_current_context():
         log_debug(u"Error detecting selection context: {}".format(safe_str(ex)))
     return context
 
+_menu_window_singleton = None
+
+def close_radial_menu_fast():
+    try:
+        def do_hide():
+            try:
+                win = get_active_window()
+                if win and not getattr(win, "customizer_mode", False):
+                    from System.Windows import Visibility
+                    win.Visibility = Visibility.Hidden
+            except:
+                pass
+        from System import Action
+        if _ui_dispatcher:
+            _ui_dispatcher.BeginInvoke(Action(do_hide))
+        elif System.Windows.Application.Current:
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(Action(do_hide))
+    except:
+        pass
+
 def trigger_radial_menu(x, y):
-    global _ui_dispatcher
+    global _ui_dispatcher, _menu_window_singleton
     log_debug(u"trigger_radial_menu called for x={}, y={}".format(x, y))
     
     active_win = get_active_window()
-    if active_win is not None:
-        try:
-            # If active window is in customizer mode, DO NOT reopen or close it!
-            if getattr(active_win, "customizer_mode", False):
-                log_debug(u"RadialMenuWindow is in customizer mode. Ignoring trigger_radial_menu.")
-                return
-        except Exception as active_ex:
-            log_debug(u"Error checking customizer mode of active window: {}".format(safe_str(active_ex)))
-        try:
-            # We must close the window on the UI thread to prevent thread access crashes
-            def close_window():
-                try:
-                    win = get_active_window()
-                    if win:
-                        win.Close()
-                        log_debug(u"Closed existing window instance on UI thread.")
-                except:
-                    pass
-                finally:
-                    set_active_window(None)
-                    with _delegate_lock:
-                        if wrapped_close in _active_close_delegates:
-                            _active_close_delegates.remove(wrapped_close)
-                    
-            from System.Windows import Application
-            from System import Action
-            wrapped_close = Action(close_window)
-            with _delegate_lock:
-                _active_close_delegates.append(wrapped_close)
-                
-            if _ui_dispatcher:
-                _ui_dispatcher.BeginInvoke(wrapped_close)
-            elif Application.Current:
-                Application.Current.Dispatcher.BeginInvoke(wrapped_close)
-            else:
-                from System.Windows.Threading import Dispatcher
-                Dispatcher.CurrentDispatcher.BeginInvoke(wrapped_close)
-        except Exception as ex:
-            log_debug(u"Error dispatching close for existing window: {}".format(safe_str(ex)))
+    if active_win is not None and getattr(active_win, "customizer_mode", False):
+        log_debug(u"RadialMenuWindow is in customizer mode. Ignoring trigger_radial_menu.")
+        return
         
-    def open_window():
+    def show_or_create_window():
+        global _menu_window_singleton
         try:
             xaml_path = os.path.join(os.path.dirname(__file__), "ui.xaml")
             
             # DPI Calculation to convert physical to logical coordinates
             import System.Windows.Forms as winforms
-            from System.Windows import SystemParameters
+            from System.Windows import SystemParameters, Visibility
             screen_width = winforms.Screen.PrimaryScreen.Bounds.Width
             logical_width = SystemParameters.PrimaryScreenWidth
-            scale = float(logical_width) / float(screen_width)
-            log_debug(u"DPI Scale = {}".format(scale))
+            scale = float(logical_width) / float(screen_width) if screen_width > 0 else 1.0
             
             logical_x = x * scale
             logical_y = y * scale
-            log_debug(u"Logical coordinates: x={}, y={}".format(logical_x, logical_y))
             
-            # Detect context before window creation
             ctx = get_current_context()
-            win = RadialMenuWindow(xaml_path, active_context=ctx)
             
-            # Set owner window handle to avoid thread focus/re-entrancy native crashes
+            # Check if singleton window exists and is valid
+            if _menu_window_singleton is not None and getattr(_menu_window_singleton, "IsLoaded", False):
+                win = _menu_window_singleton
+                win.active_context = ctx
+                win._is_closing = False
+                win.Left = logical_x - 320
+                win.Top = logical_y - 320
+                win.cache_revit_context()
+                win.load_layout_configuration()
+                win.update_radial_geometry()
+                win.Visibility = Visibility.Visible
+                set_active_window(win)
+                log_debug(u"Reused existing RadialMenuWindow singleton at Left={}, Top={}.".format(win.Left, win.Top))
+                return
+                
+            # Fresh window creation on first run
+            win = RadialMenuWindow(xaml_path, active_context=ctx)
+            _menu_window_singleton = win
+            
             try:
                 from System.Windows.Interop import WindowInteropHelper
                 revit_window_handle = HOST_APP.proc_window
@@ -7777,61 +7905,40 @@ def trigger_radial_menu(x, y):
                     helper = WindowInteropHelper(win)
                     helper.Owner = revit_window_handle
                     log_debug(u"Window Owner set to Revit MainWindowHandle successfully.")
-                else:
-                    log_debug(u"Warning: HOST_APP.proc_window is null, cannot set Window Owner.")
             except Exception as owner_ex:
                 log_debug(u"Failed to set Window Owner: {}".format(safe_str(owner_ex)))
                 
             win.Left = logical_x - 320
             win.Top = logical_y - 320
-            log_debug(u"Showing window at Left={}, Top={}".format(win.Left, win.Top))
             win.ShowActivated = False
             win.Show()
             set_active_window(win)
-            log_debug(u"Window shown successfully (ShowActivated=False).")
+            log_debug(u"Created and showed new RadialMenuWindow at Left={}, Top={}.".format(win.Left, win.Top))
         except Exception as ex:
             tb = safe_traceback()
-            log_debug(u"Python Exception in open_window: {}\n{}".format(safe_str(ex), tb))
-        except System.Exception as ex:
-            log_debug(u"CLR Exception in open_window: {}".format(safe_str(ex)))
-            if hasattr(ex, "InnerException") and ex.InnerException:
-                log_debug(u"Inner CLR Exception: {}".format(safe_str(ex.InnerException)))
-        finally:
-            with _delegate_lock:
-                if wrapped_open in _active_open_delegates:
-                    _active_open_delegates.remove(wrapped_open)
- 
-    from System.Windows import Application
+            log_debug(u"Exception in show_or_create_window: {}\n{}".format(safe_str(ex), tb))
+            
     from System import Action
-    log_debug(u"Dispatching open_window onto UI thread...")
-    wrapped_open = Action(open_window)
-    with _delegate_lock:
-        _active_open_delegates.append(wrapped_open)
-        
+    wrapped_show = Action(show_or_create_window)
     if _ui_dispatcher:
-        _ui_dispatcher.BeginInvoke(wrapped_open)
-    elif Application.Current:
-        Application.Current.Dispatcher.BeginInvoke(wrapped_open)
+        _ui_dispatcher.BeginInvoke(wrapped_show)
+    elif System.Windows.Application.Current:
+        System.Windows.Application.Current.Dispatcher.BeginInvoke(wrapped_show)
     else:
-        log_debug(u"No UI dispatcher available! Falling back to current thread dispatcher.")
         from System.Windows.Threading import Dispatcher
-        Dispatcher.CurrentDispatcher.BeginInvoke(wrapped_open)
+        Dispatcher.CurrentDispatcher.BeginInvoke(wrapped_show)
 
 # Hook callback function logic
 def hook_callback(nCode, wParam, lParam):
     global _rbutton_down_x, _rbutton_down_y, _is_holding, _menu_opened_by_hold, _hook_id, _hold_id_counter, _active_window
     global _trigger_mode, _last_rbutton_down_time, _last_rbutton_down_x, _last_rbutton_down_y, _menu_opened_by_double_click
-    global _selection_before_click
+    global _enable_gestures, _gesture_threshold, _gesture_flick_detected, _gesture_target_item
     try:
-        # If the active window is in customizer mode, we should ignore all hook events to prevent deadlocks and unexpected triggers
         active_win = get_active_window()
         if active_win and getattr(active_win, "customizer_mode", False):
             return user32.CallNextHookEx(_hook_id, nCode, wParam, lParam)
             
         if nCode >= 0:
-            if wParam in [0x0204, 0x0205, 0x0206]: # WM_RBUTTONDOWN, WM_RBUTTONUP, WM_RBUTTONDBLCLK
-                log_debug(u"HookEvent: wParam={} (0x{:04X})".format(wParam, wParam))
-            
             if wParam == 0x0204:  # WM_RBUTTONDOWN
                 if not lParam:
                     return user32.CallNextHookEx(_hook_id, nCode, wParam, lParam)
@@ -7839,7 +7946,6 @@ def hook_callback(nCode, wParam, lParam):
                 current_x = hook_struct.pt.x
                 current_y = hook_struct.pt.y
                 
-                # Check for double click manually (in case WM_RBUTTONDBLCLK is not dispatched)
                 current_time = time.time()
                 time_diff = current_time - _last_rbutton_down_time
                 dx = abs(current_x - _last_rbutton_down_x)
@@ -7860,16 +7966,12 @@ def hook_callback(nCode, wParam, lParam):
                             _is_holding = False
                             _menu_opened_by_double_click = True
                         trigger_radial_menu(current_x, current_y)
-                        return 1  # Swallow the second button down
+                        return 1
                 else:
-                    # Check if Shift modifier is pressed via Win32 (allows entering customization directly from mouse long-press)
-                    # VK_SHIFT = 0x10. If high-order bit is 1, key is down.
-                    is_shift_pressed = (user32.GetKeyState(0x10) & 0x8000) != 0
-                    if is_shift_pressed:
-                        pass
-                    
                     _rbutton_down_x = current_x
                     _rbutton_down_y = current_y
+                    _gesture_flick_detected = False
+                    _gesture_target_item = None
                     
                     with _hold_lock:
                         _is_holding = True
@@ -7877,9 +7979,6 @@ def hook_callback(nCode, wParam, lParam):
                         _hold_id_counter += 1
                         current_hold_id = _hold_id_counter
                     
-                    log_debug(u"RBUTTONDOWN at pt=({}, {}), starting thread hold_id={}.".format(_rbutton_down_x, _rbutton_down_y, current_hold_id))
-                    
-                    # Start hold detection in a background thread to prevent UI thread dispatcher blockages
                     t = threading.Thread(target=hold_detection_worker, args=(current_hold_id, _rbutton_down_x, _rbutton_down_y))
                     t.daemon = True
                     t.start()
@@ -7888,58 +7987,90 @@ def hook_callback(nCode, wParam, lParam):
                 if _trigger_mode == "double_click":
                     if not lParam:
                         return user32.CallNextHookEx(_hook_id, nCode, wParam, lParam)
-                    log_debug(u"WM_RBUTTONDBLCLK hook event. Opening radial menu.")
                     hook_struct = ctypes.cast(ctypes.c_void_p(lParam), ctypes.POINTER(MOUSEHOOKSTRUCT)).contents
                     with _hold_lock:
                         _is_holding = False
                         _menu_opened_by_double_click = True
                     trigger_radial_menu(hook_struct.pt.x, hook_struct.pt.y)
-                    return 1  # Swallow
+                    return 1
                     
             elif wParam == 0x0205:  # WM_RBUTTONUP
-                log_debug(u"RBUTTONUP. _is_holding={}, _menu_opened_by_hold={}".format(_is_holding, _menu_opened_by_hold))
                 swallow = False
                 with _hold_lock:
+                    was_holding = _is_holding
+                    was_opened_by_hold = _menu_opened_by_hold
+                    was_double_click = _menu_opened_by_double_click
                     _is_holding = False
-                    if _menu_opened_by_hold:
-                        _menu_opened_by_hold = False
-                        swallow = True
-                    if _menu_opened_by_double_click:
-                        _menu_opened_by_double_click = False
-                        swallow = True
+                    _menu_opened_by_hold = False
+                    _menu_opened_by_double_click = False
+                
+                # Check for Fast Gesture Flick execution
+                if _enable_gestures and _gesture_flick_detected and _gesture_target_item:
+                    target_cmd_item = _gesture_target_item
+                    _gesture_flick_detected = False
+                    _gesture_target_item = None
+                    
+                    cmd_type = target_cmd_item.get("type")
+                    cmd_value = target_cmd_item.get("command")
+                    log_debug(u"Gesture flick executed command: {} ({})".format(target_cmd_item.get("name"), cmd_value))
+                    
+                    close_radial_menu_fast()
+                    
+                    if _event_handler and _ext_event and cmd_value not in ["empty", "submenu1", "submenu2"]:
+                        _event_handler.set_action(execute_command, cmd_type, cmd_value)
+                        _ext_event.Raise()
+                    return 1  # Swallow RBUTTONUP
+                    
+                if was_opened_by_hold or was_double_click:
+                    swallow = True
                 
                 if swallow:
-                    log_debug(u"Swallowing RBUTTONUP.")
-                    return 1  # Swallow right button up to prevent Revit context menu
+                    return 1  # Swallow RBUTTONUP to prevent Revit context menu
                     
             elif wParam == 0x0200:  # WM_MOUSEMOVE
-                # Quick lockless check first to avoid overhead on every mouse movement
-                is_holding_now = False
-                with _hold_lock:
-                    is_holding_now = _is_holding
+                if not _is_holding:
+                    return user32.CallNextHookEx(_hook_id, nCode, wParam, lParam)
                 
-                if is_holding_now and lParam:
+                if lParam:
                     hook_struct = ctypes.cast(ctypes.c_void_p(lParam), ctypes.POINTER(MOUSEHOOKSTRUCT)).contents
-                    dx = abs(hook_struct.pt.x - _rbutton_down_x)
-                    dy = abs(hook_struct.pt.y - _rbutton_down_y)
-                    # If mouse moved more than 10 pixels, cancel the hold detection
-                    if dx > 10 or dy > 10:
-                        log_debug(u"Mouse moved (dx={}, dy={}). Cancelling hold.".format(dx, dy))
-                        with _hold_lock:
-                            _is_holding = False
-    except Exception as ex:
-        tb = safe_traceback()
-        log_debug(u"Python Exception in hook_callback: {}\n{}".format(safe_str(ex), tb))
-    except System.Exception as ex:
-        log_debug(u"CLR Exception in hook_callback: {}".format(safe_str(ex)))
-        
+                    curr_x = hook_struct.pt.x
+                    curr_y = hook_struct.pt.y
+                    dx = float(curr_x - _rbutton_down_x)
+                    dy = float(curr_y - _rbutton_down_y)
+                    dist = math.sqrt(dx * dx + dy * dy)
+                    
+                    if _enable_gestures:
+                        if dist >= _gesture_threshold:
+                            _gesture_flick_detected = True
+                            item = resolve_gesture_command_at_point(_rbutton_down_x, _rbutton_down_y, curr_x, curr_y)
+                            if item:
+                                _gesture_target_item = item
+                    else:
+                        if abs(dx) > 10.0 or abs(dy) > 10.0:
+                            with _hold_lock:
+                                _is_holding = False
+    except BaseException as ex:
+        try:
+            tb = safe_traceback()
+            log_debug(u"Exception in hook_callback: {}\n{}".format(safe_str(ex), tb))
+        except:
+            pass
+            
     return user32.CallNextHookEx(_hook_id, nCode, wParam, lParam)
 
 # Hook manager wrapper class
 def get_main_thread_id():
     try:
-        # Bypassed System.Diagnostics.Process.GetCurrentProcess() because it can cause multi-second hangs
-        pass
+        import System.Diagnostics
+        hwnd = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle
+        if hwnd:
+            hwnd_val = hwnd.ToInt64()
+            user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+            user32.GetWindowThreadProcessId.restype = ctypes.c_uint32
+            thread_id = user32.GetWindowThreadProcessId(hwnd_val, None)
+            if thread_id:
+                log_debug(u"Found Revit main window thread_id={} via HWND.".format(thread_id))
+                return thread_id
     except Exception as ex:
         log_debug(u"Failed to get thread_id via HWND: {}. Falling back to GetCurrentThreadId.".format(safe_str(ex)))
     
@@ -8060,3 +8191,60 @@ class RadialMenuManager(object):
         _ui_dispatcher = None
 
 # Execution & Toggle Logic
+if __name__ == "__main__":
+    from System.Windows.Input import Keyboard, ModifierKeys
+    is_shift = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift
+    
+    if is_shift:
+        log_debug(u"Shift-Click detected on Ribbon button. Launching customization mode directly.")
+        try:
+            # Customizer opens directly on the main thread (Ribbon button execution context is already main thread)
+            xaml_file = os.path.join(os.path.dirname(__file__), "ui.xaml")
+            win = RadialMenuWindow(xaml_file)
+            
+            # Set owner to Revit window
+            try:
+                from System.Windows.Interop import WindowInteropHelper
+                revit_window_handle = HOST_APP.proc_window
+                if revit_window_handle:
+                    helper = WindowInteropHelper(win)
+                    helper.Owner = revit_window_handle
+                    log_debug(u"Customizer Window Owner set to Revit MainWindowHandle successfully.")
+            except Exception as owner_ex:
+                log_debug(u"Failed to set Customizer Window Owner: {}".format(safe_str(owner_ex)))
+                
+            # Setup customizer panel and size
+            set_active_window(win)
+            win.setup_customizer_mode(show_window=True)
+            win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen
+            win.Show()
+            win.Activate()
+            log_debug(u"Customization Window shown and activated successfully.")
+        except Exception as ex:
+            forms.toast("Failed to open customizer: " + safe_str(ex), title="Radial Menu Error")
+    else:
+        existing_hook = System.AppDomain.CurrentDomain.GetData("RevitRadialMenuHook")
+        from pyrevit import script
+        if existing_hook:
+            try:
+                existing_hook.stop()
+            except:
+                pass
+            System.AppDomain.CurrentDomain.SetData("RevitRadialMenuHook", None)
+            try:
+                fast_toggle_icon(False)
+            except Exception as e_ico:
+                log_debug(u"Failed to toggle icon off: {}".format(safe_str(e_ico)))
+            forms.toast("Radial Menu has been disabled.", title="Radial Menu")
+        else:
+            try:
+                manager = RadialMenuManager()
+                manager.start()
+                System.AppDomain.CurrentDomain.SetData("RevitRadialMenuHook", manager)
+                try:
+                    fast_toggle_icon(True)
+                except Exception as e_ico:
+                    log_debug(u"Failed to toggle icon on: {}".format(safe_str(e_ico)))
+                forms.toast("Radial Menu enabled! Hold right-click to trigger. (Shift-click to configure)", title="Radial Menu")
+            except Exception as ex:
+                forms.toast("Failed to initialize: " + safe_str(ex), title="Radial Menu Error")

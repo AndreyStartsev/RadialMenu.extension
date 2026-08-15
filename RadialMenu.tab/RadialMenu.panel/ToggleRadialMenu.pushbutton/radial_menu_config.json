@@ -1,10 +1,12 @@
 {
     "settings": {
-        "hold_delay_ms": 400,
+        "hold_delay_ms": 200,
         "trigger_mode": "hold",
+        "enable_gestures": true,
+        "gesture_threshold": 35,
         "use_circles": false,
         "animation_style": "fade",
-        "enable_logging": true,
+        "enable_logging": false,
         "gap_width": 3.0,
         "core_radius": 45,
         "petal_width": 60,

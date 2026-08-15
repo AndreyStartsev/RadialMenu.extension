@@ -7,5 +7,6 @@ __pycache__/
 # Revit journals / crash dumps / log files
 *.dmp
 *.log
+*.log.bak
 RadialMenu.tab/RadialMenu.panel/ToggleRadialMenu.pushbutton/RadialMenu_debug.log
 RadialMenu.tab/RadialMenu.panel/ToggleRadialMenu.pushbutton/extracted_icons/
