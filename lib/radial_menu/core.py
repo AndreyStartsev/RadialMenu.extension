@@ -617,124 +617,143 @@ def resolve_builtin_command(cmd_value):
             
     return cmd_value, safe_cmd
 
-def extract_icons_from_ribbon(force_overwrite=False):
+def save_wpf_image_to_png(img, file_path):
+    if not img or not file_path:
+        return False
     try:
-        import os
-        clr.AddReference("AdWindows")
-        import Autodesk.Windows as adWin
-        from System.Windows.Media.Imaging import PngBitmapEncoder, BitmapFrame
+        from System.Windows.Media.Imaging import PngBitmapEncoder, BitmapFrame, BitmapSource, RenderTargetBitmap
+        from System.Windows.Media import DrawingImage, DrawingVisual
+        from System.Windows import Rect
         import System.IO
-        
-        icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
-        if not os.path.exists(icons_dir):
-            os.makedirs(icons_dir)
-            
-        saved_count = [0]
-        skipped_count = [0]
-        failed_count = [0]
-        
-        def save_img(img, item_id):
-            if not img or not item_id:
-                return
-            safe_filename = "".join([c for c in item_id if c.isalnum() or c in ("_", "-")]).strip()
-            if not safe_filename:
-                return
-                
-            global _IS_REVIT_DARK
-            suffix = ".dark.png" if _IS_REVIT_DARK else ".png"
-            file_path = os.path.join(icons_dir, safe_filename + suffix)
-            
-            if not force_overwrite and os.path.exists(file_path):
-                skipped_count[0] += 1
-                return
-                
+
+        # 1. If already a BitmapSource and not a DrawingImage
+        if isinstance(img, BitmapSource) and not isinstance(img, DrawingImage):
             try:
                 encoder = PngBitmapEncoder()
                 encoder.Frames.Add(BitmapFrame.Create(img))
                 with System.IO.FileStream(file_path, System.IO.FileMode.Create, System.IO.FileAccess.Write, getattr(System.IO.FileShare, "None")) as fs:
                     encoder.Save(fs)
-                saved_count[0] += 1
-            except Exception as e_save:
-                failed_count[0] += 1
-                
-        def process_item(item):
-            if not item:
-                return
-            if hasattr(item, "Id") and item.Id:
-                if hasattr(item, "LargeImage") and item.LargeImage:
-                    save_img(item.LargeImage, item.Id)
-                elif hasattr(item, "Image") and item.Image:
-                    save_img(item.Image, item.Id)
-            if hasattr(item, "Items") and item.Items:
-                for sub_item in item.Items:
-                    process_item(sub_item)
-                    
-        log_debug("Starting ribbon icon extraction...")
-        ribbon_ctrl = adWin.ComponentManager.Ribbon
-        if ribbon_ctrl:
-            tab_count = len(ribbon_ctrl.Tabs)
-            log_debug("Found RibbonControl with {} tabs.".format(tab_count))
-            for tab in ribbon_ctrl.Tabs:
-                if tab.Panels:
-                    for panel in tab.Panels:
-                        if panel.Source and panel.Source.Items:
-                            for item in panel.Source.Items:
-                                process_item(item)
-            log_debug("Ribbon icon extraction finished. Extracted: {}, Skipped (already exist): {}, Failed: {}.".format(
-                saved_count[0], skipped_count[0], failed_count[0]
-            ))
-        else:
-            log_debug("RibbonControl not found in ComponentManager.")
-    except Exception as ex:
-        log_debug("Error extracting ribbon icons: " + str(ex))
+                return True
+            except:
+                pass
 
-
-_THEME_ICONS_CHECKED = {}
-
-def check_and_suggest_icon_extraction(window):
-    try:
-        from Autodesk.Revit.UI import UIThemeManager, UITheme
-        is_dark = False
+        # 2. Rasterize via RenderTargetBitmap (works for DrawingImage, vector icons, etc.)
+        w = 32
+        h = 32
         try:
-            is_dark = (UIThemeManager.CurrentTheme == UITheme.Dark)
+            if hasattr(img, "Width") and img.Width > 0:
+                w = int(img.Width)
+            if hasattr(img, "Height") and img.Height > 0:
+                h = int(img.Height)
         except:
             pass
-        theme_key = "dark" if is_dark else "light"
-        
-        global _THEME_ICONS_CHECKED
-        if _THEME_ICONS_CHECKED.get(theme_key):
-            return
             
-        _THEME_ICONS_CHECKED[theme_key] = True
-        
-        import os
-        icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
-        has_icons = False
-        if os.path.exists(icons_dir):
-            if is_dark:
-                theme_files = [f for f in os.listdir(icons_dir) if f.lower().endswith(".dark.png")]
-            else:
-                theme_files = [f for f in os.listdir(icons_dir) if f.lower().endswith(".png") and not f.lower().endswith(".dark.png")]
-            
-            if len(theme_files) >= 10:
-                has_icons = True
-                
-        if not has_icons:
-            from System.Windows import MessageBox, MessageBoxButton, MessageBoxImage
-            msg = u"Revit Ribbon icons for the active theme ({}) have not been extracted yet.\nExtract them now? (Required for customizer icons)".format(theme_key.upper())
-            res = MessageBox.Show(window, msg, "Extract Icons", MessageBoxButton.YesNo, MessageBoxImage.Question)
-            if res.ToString() == "Yes":
-                from System.Windows.Input import Cursors, Mouse
-                Mouse.OverrideCursor = Cursors.Wait
-                try:
-                    extract_icons_from_ribbon(force_overwrite=True)
-                    MessageBox.Show(window, "Icons extracted successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information)
-                except Exception as ex_ext:
-                    log_debug("Failed to extract icons: " + str(ex_ext))
-                finally:
-                    Mouse.OverrideCursor = None
+        if w <= 0 or w > 256:
+            w = 32
+        if h <= 0 or h > 256:
+            h = 32
+
+        rtb = RenderTargetBitmap(w, h, 96, 96, System.Windows.Media.PixelFormats.Pbgra32)
+        dv = DrawingVisual()
+        with dv.RenderOpen() as dc:
+            dc.DrawImage(img, Rect(0, 0, w, h))
+        rtb.Render(dv)
+
+        encoder = PngBitmapEncoder()
+        encoder.Frames.Add(BitmapFrame.Create(rtb))
+        with System.IO.FileStream(file_path, System.IO.FileMode.Create, System.IO.FileAccess.Write, getattr(System.IO.FileShare, "None")) as fs:
+            encoder.Save(fs)
+        return True
     except Exception as ex:
-        log_debug("Error checking or extracting icons: " + str(ex))
+        try:
+            log_debug(u"Failed to save WPF image to PNG ({}): {}".format(file_path, safe_str(ex)))
+        except:
+            pass
+        return False
+
+def extract_icons_from_ribbon(force_overwrite=False, completion_callback=None):
+    def worker():
+        try:
+            import os
+            clr.AddReference("AdWindows")
+            import Autodesk.Windows as adWin
+            
+            icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
+            if not os.path.exists(icons_dir):
+                try:
+                    os.makedirs(icons_dir)
+                except:
+                    pass
+                
+            saved_count = [0]
+            skipped_count = [0]
+            failed_count = [0]
+            seen_ids = set()
+            
+            global _IS_REVIT_DARK
+            suffix = ".dark.png" if _IS_REVIT_DARK else ".png"
+            
+            log_debug(u"Starting background ribbon icon extraction...")
+            ribbon_ctrl = getattr(adWin.ComponentManager, "Ribbon", None)
+            items_to_process = []
+            if ribbon_ctrl and getattr(ribbon_ctrl, "Tabs", None):
+                for tab in ribbon_ctrl.Tabs:
+                    if getattr(tab, "Panels", None):
+                        for panel in tab.Panels:
+                            if panel.Source and getattr(panel.Source, "Items", None):
+                                for item in panel.Source.Items:
+                                    items_to_process.append(item)
+                                    
+            def process_item_recursive(itm):
+                if not itm:
+                    return
+                try:
+                    if hasattr(itm, "Id") and itm.Id:
+                        r_id = str(itm.Id)
+                        if r_id not in seen_ids:
+                            seen_ids.add(r_id)
+                            safe_fn = "".join([c for c in r_id if c.isalnum() or c in ("_", "-")]).strip()
+                            if safe_fn:
+                                file_path = os.path.join(icons_dir, safe_fn + suffix)
+                                if not force_overwrite and os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+                                    skipped_count[0] += 1
+                                else:
+                                    img = None
+                                    if hasattr(itm, "LargeImage") and itm.LargeImage:
+                                        img = itm.LargeImage
+                                    elif hasattr(itm, "Image") and itm.Image:
+                                        img = itm.Image
+                                    if img:
+                                        if save_wpf_image_to_png(img, file_path):
+                                            saved_count[0] += 1
+                                        else:
+                                            failed_count[0] += 1
+                    if hasattr(itm, "Items") and itm.Items:
+                        for sub_itm in itm.Items:
+                            process_item_recursive(sub_itm)
+                except:
+                    pass
+
+            for itm in items_to_process:
+                process_item_recursive(itm)
+
+            log_debug(u"Background ribbon icon extraction finished: saved={}, skipped={}, failed={}.".format(
+                saved_count[0], skipped_count[0], failed_count[0]
+            ))
+            if completion_callback:
+                completion_callback(saved_count[0], skipped_count[0], failed_count[0])
+        except Exception as ex:
+            log_debug(u"Error in background ribbon extraction: {}".format(safe_str(ex)))
+            if completion_callback:
+                completion_callback(0, 0, 0)
+                
+    t = threading.Thread(target=worker)
+    t.daemon = True
+    t.start()
+
+def check_and_suggest_icon_extraction(window):
+    # Left as a no-op to prevent blocking startup popups
+    pass
 
 
 def migrate_old_config(data):
@@ -2168,11 +2187,6 @@ class RadialMenuWindow(Window):
                     btn.Drop += self.on_button_drop
             self.cache_revit_context()
             
-            # Check icons for the current theme asynchronously after window loads
-            def check_icons_async():
-                check_and_suggest_icon_extraction(self)
-            from System import Action
-            self.Dispatcher.BeginInvoke(Action(check_icons_async))
         except Exception as ex:
             log_debug(u"Exception connecting Click events: {}".format(safe_str(ex)))
             raise
@@ -4092,21 +4106,32 @@ class RadialMenuWindow(Window):
         try:
             from System.Windows import MessageBox, MessageBoxButton, MessageBoxImage
             
-            msg = u"Extract all Revit Ribbon icons for the active theme?\nThis will take a few seconds."
+            msg = u"Extract all Revit Ribbon icons for the active theme in the background?\nThis process runs asynchronously and will not freeze Revit."
             if _IS_REVIT_DARK:
                 msg += u"\n\nActive theme: Dark (saving as *.dark.png)"
             else:
                 msg += u"\n\nActive theme: Light (saving as *.png)"
                 
-            res = MessageBox.Show(msg, "Extract Icons", MessageBoxButton.OKCancel, MessageBoxImage.Information)
+            res = MessageBox.Show(msg, "Extract Ribbon Icons", MessageBoxButton.OKCancel, MessageBoxImage.Information)
             if res.ToString() == "OK":
-                from System.Windows.Input import Cursors, Mouse
-                Mouse.OverrideCursor = Cursors.Wait
-                try:
-                    extract_icons_from_ribbon(force_overwrite=True)
-                    MessageBox.Show("Icons extracted successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information)
-                finally:
-                    Mouse.OverrideCursor = None
+                btn = getattr(self, "BtnExtractAllIcons", None)
+                if btn:
+                    btn.IsEnabled = False
+                    btn.Content = "Extracting..."
+                    
+                def on_done(saved, skipped, failed):
+                    def update_ui():
+                        if btn:
+                            btn.IsEnabled = True
+                            btn.Content = "Extract Ribbon Icons"
+                        MessageBox.Show(u"Ribbon icons extraction completed!\n\nExtracted: {}\nSkipped (already cached): {}\nFailed: {}".format(saved, skipped, failed), "Success", MessageBoxButton.OK, MessageBoxImage.Information)
+                    try:
+                        from System import Action
+                        self.Dispatcher.BeginInvoke(Action(update_ui))
+                    except:
+                        pass
+                        
+                extract_icons_from_ribbon(force_overwrite=True, completion_callback=on_done)
         except Exception as ex:
             log_debug("Error in on_extract_all_icons_clicked: " + str(ex))
 
@@ -7353,15 +7378,7 @@ class RadialMenuWindow(Window):
                                 img = r_item.Image
                                 
                             if img:
-                                try:
-                                    from System.Windows.Media.Imaging import PngBitmapEncoder, BitmapFrame
-                                    encoder = PngBitmapEncoder()
-                                    encoder.Frames.Add(BitmapFrame.Create(img))
-                                    with System.IO.FileStream(file_path, System.IO.FileMode.Create, System.IO.FileAccess.Write, getattr(System.IO.FileShare, "None")) as fs:
-                                        encoder.Save(fs)
-                                    log_debug(u"Extracted icon on drag for: {} (theme={})".format(r_id, suffix))
-                                except Exception as e_save:
-                                    log_debug(u"Failed to extract icon on drag: {}".format(str(e_save)))
+                                save_wpf_image_to_png(img, file_path)
                         return file_path if os.path.exists(file_path) else ""
 
                     is_pulldown = False
