@@ -1,298 +1,200 @@
 {
+    "settings": {
+        "hold_delay_ms": 400,
+        "trigger_mode": "hold",
+        "use_circles": false,
+        "animation_style": "fade",
+        "enable_logging": true,
+        "gap_width": 3.0,
+        "core_radius": 45,
+        "petal_width": 60,
+        "ring_gap": 5,
+        "theme": "pyRevit Dark",
+        "color_scheme": "auto",
+        "color_normal": "#F21E1E24",
+        "color_hover_start": "#FF0083B0",
+        "color_hover_end": "#FF004B66",
+        "color_border": "#25FFFFFF",
+        "l1_max_angle": 360,
+        "l2_max_angle": 90,
+        "l3_max_angle": 90
+    },
     "command_pool": [
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\icon.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 10, 
-            "name": "Smart\\nSelect", 
-            "id": "exetnsion_sgtools_sgpyt_smartselect", 
-            "is_active": true, 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan", 
-                    "Sheet"
-                ], 
-                "allowed_selection_states": [
-                    "Selection"
-                ], 
-                "allowed_classes": []
-            }, 
-            "type": "built_in", 
-            "command": "submenu1"
-        }, 
+            "id": "zoom_fit",
+            "type": "built_in",
+            "name": "Zoom Fit",
+            "command": "zoom",
+            "icon": "\ud83d\udd0d",
+            "level": 1,
+            "parent": null,
+            "priority": 10,
+            "context_rules": {}
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Category.pushbutton\\icon.png", 
-            "parent": "exetnsion_sgtools_sgpyt_smartselect", 
-            "level": 2, 
-            "priority": 20, 
-            "name": "Category", 
-            "id": "exetnsion_sgtools_sgpyt_smartselect_category", 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan", 
-                    "Sheet"
-                ], 
-                "allowed_selection_states": [
-                    "Selection"
-                ], 
-                "allowed_classes": []
-            }, 
-            "type": "pyrevit", 
-            "command": "exetnsion_sgtools_sgpyt_smartselect_category"
-        }, 
+            "id": "close_inact",
+            "type": "built_in",
+            "name": "Close Inact.",
+            "command": "close_hidden",
+            "icon": "\u274c",
+            "level": 1,
+            "parent": null,
+            "priority": 20,
+            "context_rules": {}
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Famaly.pushbutton\\icon.png", 
-            "parent": "exetnsion_sgtools_sgpyt_smartselect", 
-            "level": 2, 
-            "priority": 30, 
-            "name": "Famaly", 
-            "id": "exetnsion_sgtools_sgpyt_smartselect_famaly", 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan", 
-                    "Sheet"
-                ], 
-                "allowed_selection_states": [
-                    "Selection"
-                ], 
-                "allowed_classes": []
-            }, 
-            "type": "pyrevit", 
-            "command": "exetnsion_sgtools_sgpyt_smartselect_famaly"
-        }, 
+            "id": "submenu1",
+            "type": "built_in",
+            "name": "Menu 1",
+            "command": "submenu1",
+            "icon": "\u25b6",
+            "level": 1,
+            "parent": null,
+            "priority": 30,
+            "context_rules": {}
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Host.pushbutton\\icon.png", 
-            "parent": "exetnsion_sgtools_sgpyt_smartselect", 
-            "level": 2, 
-            "priority": 40, 
-            "name": "Host", 
-            "id": "exetnsion_sgtools_sgpyt_smartselect_host", 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan", 
-                    "Sheet"
-                ], 
-                "allowed_selection_states": [
-                    "Selection"
-                ], 
-                "allowed_classes": []
-            }, 
-            "type": "pyrevit", 
-            "command": "exetnsion_sgtools_sgpyt_smartselect_host"
-        }, 
+            "id": "save_model",
+            "type": "built_in",
+            "name": "Save Model",
+            "command": "save",
+            "icon": "\ud83d\udcbe",
+            "level": 1,
+            "parent": null,
+            "priority": 40,
+            "context_rules": {}
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Smart Select.pulldown\\Type.pushbutton\\icon.png", 
-            "parent": "exetnsion_sgtools_sgpyt_smartselect", 
-            "level": 2, 
-            "priority": 50, 
-            "name": "Type", 
-            "id": "exetnsion_sgtools_sgpyt_smartselect_type", 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan", 
-                    "Sheet"
-                ], 
-                "allowed_selection_states": [
-                    "Selection"
-                ], 
-                "allowed_classes": []
-            }, 
-            "type": "pyrevit", 
-            "command": "exetnsion_sgtools_sgpyt_smartselect_type"
-        }, 
+            "id": "3d_view",
+            "type": "built_in",
+            "name": "3D View",
+            "command": "3d",
+            "icon": "\ud83c\udfe0",
+            "level": 1,
+            "parent": null,
+            "priority": 50,
+            "context_rules": {}
+        },
         {
-            "icon": "extracted_icons/ID_RBS_SPRINKLER.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 30, 
-            "name": "Sprinklers", 
-            "id": "new_submenu", 
-            "context_rules": {}, 
-            "type": "built_in", 
-            "command": "submenu2"
-        }, 
+            "id": "reveal",
+            "type": "built_in",
+            "name": "Reveal",
+            "command": "reveal",
+            "icon": "\ud83d\udca1",
+            "level": 1,
+            "parent": null,
+            "priority": 60,
+            "context_rules": {}
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Branch descinnect.pushbutton\\icon.png", 
-            "parent": "new_submenu", 
-            "level": 2, 
-            "priority": 70, 
-            "name": "Disconnect Sprinkler", 
-            "id": "exetnsion_sgtools_sgpyt_branchdescinnect", 
-            "is_active": true, 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan", 
-                    "Sheet"
-                ], 
-                "allowed_selection_states": [
-                    "Pre-highlighted", 
-                    "Selection"
-                ], 
-                "allowed_classes": [
-                    "Sprinklers"
-                ]
-            }, 
-            "type": "pyrevit", 
-            "command": "exetnsion_sgtools_sgpyt_branchdescinnect"
-        }, 
+            "id": "thin_lines",
+            "type": "built_in",
+            "name": "Thin Lines",
+            "command": "thin_lines",
+            "icon": "\u2796",
+            "level": 1,
+            "parent": null,
+            "priority": 70,
+            "context_rules": {}
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\ASTools.tab\\Test.panel\\FlipSprinkler.pushbutton\\icon.png", 
-            "parent": "new_submenu", 
-            "level": 2, 
-            "priority": 80, 
-            "name": "FlipSprinkler", 
-            "id": "exetnsion_astools_test_flipsprinkler", 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan", 
-                    "Sheet"
-                ], 
-                "allowed_selection_states": [
-                    "Pre-highlighted", 
-                    "Selection"
-                ], 
-                "allowed_classes": [
-                    "Sprinklers"
-                ]
-            }, 
-            "type": "pyrevit", 
-            "command": "exetnsion_astools_test_flipsprinkler"
-        }, 
+            "id": "detail_lvl",
+            "type": "built_in",
+            "name": "Detail Lvl",
+            "command": "detail_level",
+            "icon": "\ud83e\uddf1",
+            "level": 1,
+            "parent": null,
+            "priority": 80,
+            "context_rules": {}
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Autodem.pushbutton\\icon.png", 
-            "parent": "new_submenu", 
-            "level": 2, 
-            "priority": 90, 
-            "name": "Dimension\\nSprinklers", 
-            "id": "exetnsion_sgtools_sgpyt_autodem", 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan", 
-                    "Sheet"
-                ], 
-                "allowed_selection_states": [
-                    "Pre-highlighted", 
-                    "Selection"
-                ], 
-                "allowed_classes": [
-                    "Sprinklers"
-                ]
-            }, 
-            "type": "pyrevit", 
-            "command": "exetnsion_sgtools_sgpyt_autodem"
-        }, 
+            "id": "sub_zoom",
+            "type": "built_in",
+            "name": "Sub-Zoom",
+            "command": "zoom",
+            "icon": "\ud83d\udd0d",
+            "level": 2,
+            "parent": "submenu1",
+            "priority": 10,
+            "context_rules": {}
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\CollapseFitting.pushbutton\\icon.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 40, 
-            "name": "Collapse Fitting", 
-            "id": "exetnsion_sgtools_sgpyt_collapsefitting", 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan", 
-                    "Sheet"
-                ], 
-                "allowed_selection_states": [
-                    "Pre-highlighted", 
-                    "Selection"
-                ], 
-                "allowed_classes": [
-                    "Pipe Fittings", 
-                    "Pipe Segments", 
-                    "Pipe"
-                ]
-            }, 
-            "type": "pyrevit", 
-            "command": "exetnsion_sgtools_sgpyt_collapsefitting"
-        }, 
+            "id": "sub_save",
+            "type": "built_in",
+            "name": "Sub-Save",
+            "command": "save",
+            "icon": "\ud83d\udcbe",
+            "level": 2,
+            "parent": "submenu1",
+            "priority": 20,
+            "context_rules": {}
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\PullFitting.pushbutton\\icon.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 50, 
-            "name": "PullFitting", 
-            "id": "exetnsion_sgtools_sgpyt_pullfitting", 
-            "context_rules": {
-                "allowed_views": [
-                    "3D", 
-                    "Plan", 
-                    "Sheet"
-                ], 
-                "allowed_selection_states": [
-                    "Pre-highlighted", 
-                    "Selection"
-                ], 
-                "allowed_classes": [
-                    "Pipe Fittings", 
-                    "Pipe Segments"
-                ]
-            }, 
-            "type": "pyrevit", 
-            "command": "exetnsion_sgtools_sgpyt_pullfitting"
-        }, 
+            "id": "sub_3d",
+            "type": "built_in",
+            "name": "Sub-3D",
+            "command": "3d",
+            "icon": "\ud83c\udfe0",
+            "level": 2,
+            "parent": "submenu1",
+            "priority": 30,
+            "context_rules": {}
+        },
         {
-            "icon": "G:\\My Drive\\Exetnsion.extension\\SGTools.tab\\SGPyT.panel\\Misc.pulldown\\ExportSpecs.pushbutton\\icon.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 70, 
-            "name": "Export\\nSpecs", 
-            "id": "exetnsion_sgtools_sgpyt_misc_exportspecs", 
-            "context_rules": {}, 
-            "type": "pyrevit", 
-            "command": "exetnsion_sgtools_sgpyt_misc_exportspecs"
-        }, 
+            "id": "submenu2",
+            "type": "built_in",
+            "name": "Menu 2",
+            "command": "submenu2",
+            "icon": "\u25b6",
+            "level": 2,
+            "parent": "submenu1",
+            "priority": 40,
+            "context_rules": {}
+        },
         {
-            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerautosize.png", 
-            "parent": null, 
-            "level": 1, 
-            "priority": 60, 
-            "name": "Sprinkler Pipe Automatic Sizing", 
-            "id": "item_2_4be92c9f", 
-            "context_rules": {}, 
-            "type": "pyrevit", 
-            "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Sprinkler autosize"
-        }, 
+            "id": "sub_thin",
+            "type": "built_in",
+            "name": "Sub-Thin",
+            "command": "thin_lines",
+            "icon": "\u2796",
+            "level": 2,
+            "parent": "submenu1",
+            "priority": 50,
+            "context_rules": {}
+        },
         {
-            "id": "item_2_25791746", 
-            "parent": null, 
-            "context_rules": {}, 
-            "level": 1, 
-            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestMatchElevation.png", 
-            "type": "pyrevit", 
-            "name": "Match Elevation", 
-            "command": "CustomCtrl_CustomCtrl_ASToolsTestMatchElevation", 
-            "priority": 20
+            "id": "sub2_reveal",
+            "type": "built_in",
+            "name": "Sub2-Reveal",
+            "command": "reveal",
+            "icon": "\ud83d\udca1",
+            "level": 3,
+            "parent": "submenu2",
+            "priority": 10,
+            "context_rules": {}
+        },
+        {
+            "id": "sub2_detail",
+            "type": "built_in",
+            "name": "Sub2-Detail",
+            "command": "detail_level",
+            "icon": "\ud83e\uddf1",
+            "level": 3,
+            "parent": "submenu2",
+            "priority": 20,
+            "context_rules": {}
+        },
+        {
+            "id": "sub2_zoom",
+            "type": "built_in",
+            "name": "Sub2-Zoom",
+            "command": "zoom",
+            "icon": "\ud83d\udd0d",
+            "level": 3,
+            "parent": "submenu2",
+            "priority": 30,
+            "context_rules": {}
         }
-    ], 
-    "settings": {
-        "l2_max_angle": 35, 
-        "petal_opacity": 100, 
-        "ring_gap": 9, 
-        "l3_max_angle": 30, 
-        "gap_width": 2.0, 
-        "petal_width": 55, 
-        "animation_style": "fade", 
-        "theme": "pyRevit Dark", 
-        "enable_logging": true, 
-        "trigger_mode": "hold", 
-        "hold_delay_ms": 250, 
-        "color_hover_end": "#FF1D3A56", 
-        "use_circles": false, 
-        "color_hover_start": "#FF4A90E2", 
-        "color_scheme": "light", 
-        "color_normal": "#F2F0F0F0", 
-        "color_border": "#20000000", 
-        "core_radius": 44
-    }
+    ]
 }
