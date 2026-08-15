@@ -261,29 +261,32 @@ class HoldDetector(object):
 
     def _worker(self, hold_id, start_x, start_y):
         """Background thread that waits for the hold delay."""
-        logger.debug(
-            "Hold worker started for hold_id=%s. Delay=%sms.",
-            hold_id, self._delay_ms,
-        )
-        time.sleep(self._delay_ms / 1000.0)
-
-        should_trigger = False
-        with self._lock:
-            if self._is_holding and self._hold_id == hold_id:
-                should_trigger = True
-                self._hold_triggered = True
-
-        if should_trigger:
+        try:
             logger.debug(
-                "Hold threshold met for hold_id=%s. Triggering callback.",
-                hold_id,
+                "Hold worker started for hold_id=%s. Delay=%sms.",
+                hold_id, self._delay_ms,
             )
-            if self._on_hold:
-                self._on_hold(start_x, start_y)
-        else:
-            logger.debug(
-                "Hold cancelled or superseded for hold_id=%s.", hold_id
-            )
+            time.sleep(self._delay_ms / 1000.0)
+
+            should_trigger = False
+            with self._lock:
+                if self._is_holding and self._hold_id == hold_id:
+                    should_trigger = True
+                    self._hold_triggered = True
+
+            if should_trigger:
+                logger.debug(
+                    "Hold threshold met for hold_id=%s. Triggering callback.",
+                    hold_id,
+                )
+                if self._on_hold:
+                    self._on_hold(start_x, start_y)
+            else:
+                logger.debug(
+                    "Hold cancelled or superseded for hold_id=%s.", hold_id
+                )
+        except BaseException as ex:
+            logger.error("Exception in win32_hook _worker: %s", ex)
 
 
 # ---------------------------------------------------------------------------

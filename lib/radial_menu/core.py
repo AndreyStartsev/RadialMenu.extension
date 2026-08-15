@@ -1001,22 +1001,41 @@ _hold_id_counter = 0
 
 def hold_detection_worker(hold_id, start_x, start_y):
     global _is_holding, _menu_opened_by_hold, _hold_delay_ms
-    log_debug(u"Hold worker thread started for hold_id={}. Delay is {}ms.".format(hold_id, _hold_delay_ms))
-    
-    delay_sec = float(_hold_delay_ms) / 1000.0
-    time.sleep(delay_sec)
-    
-    should_trigger = False
-    with _hold_lock:
-        if _is_holding and _hold_id_counter == hold_id:
-            should_trigger = True
-            _menu_opened_by_hold = True
-            
-    if should_trigger:
-        log_debug(u"Hold threshold met for hold_id={}. Triggering radial menu...".format(hold_id))
-        trigger_radial_menu(start_x, start_y)
-    else:
-        log_debug(u"Hold cancelled or superceded for hold_id={}.".format(hold_id))
+    try:
+        try:
+            log_debug(u"Hold worker thread started for hold_id={}. Delay is {}ms.".format(hold_id, _hold_delay_ms))
+        except:
+            pass
+        
+        delay_sec = 0.4
+        try:
+            delay_sec = float(_hold_delay_ms) / 1000.0
+        except:
+            pass
+        time.sleep(delay_sec)
+        
+        should_trigger = False
+        with _hold_lock:
+            if _is_holding and _hold_id_counter == hold_id:
+                should_trigger = True
+                _menu_opened_by_hold = True
+                
+        if should_trigger:
+            try:
+                log_debug(u"Hold threshold met for hold_id={}. Triggering radial menu...".format(hold_id))
+            except:
+                pass
+            trigger_radial_menu(start_x, start_y)
+        else:
+            try:
+                log_debug(u"Hold cancelled or superceded for hold_id={}.".format(hold_id))
+            except:
+                pass
+    except BaseException as ex:
+        try:
+            log_debug(u"Exception in hold_detection_worker: {}".format(safe_str(ex)))
+        except:
+            pass
 
 # Modeless Event Handler for Revit API interactions
 try:

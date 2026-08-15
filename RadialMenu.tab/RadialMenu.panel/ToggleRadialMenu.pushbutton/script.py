@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 __persistentengine__ = True
+__lightweightscopes__ = False
+
 
 import os
 import sys
@@ -1032,22 +1034,41 @@ _hold_id_counter = 0
 
 def hold_detection_worker(hold_id, start_x, start_y):
     global _is_holding, _menu_opened_by_hold, _hold_delay_ms
-    log_debug(u"Hold worker thread started for hold_id={}. Delay is {}ms.".format(hold_id, _hold_delay_ms))
-    
-    delay_sec = float(_hold_delay_ms) / 1000.0
-    time.sleep(delay_sec)
-    
-    should_trigger = False
-    with _hold_lock:
-        if _is_holding and _hold_id_counter == hold_id:
-            should_trigger = True
-            _menu_opened_by_hold = True
-            
-    if should_trigger:
-        log_debug(u"Hold threshold met for hold_id={}. Triggering radial menu...".format(hold_id))
-        trigger_radial_menu(start_x, start_y)
-    else:
-        log_debug(u"Hold cancelled or superceded for hold_id={}.".format(hold_id))
+    try:
+        try:
+            log_debug(u"Hold worker thread started for hold_id={}. Delay is {}ms.".format(hold_id, _hold_delay_ms))
+        except:
+            pass
+        
+        delay_sec = 0.4
+        try:
+            delay_sec = float(_hold_delay_ms) / 1000.0
+        except:
+            pass
+        time.sleep(delay_sec)
+        
+        should_trigger = False
+        with _hold_lock:
+            if _is_holding and _hold_id_counter == hold_id:
+                should_trigger = True
+                _menu_opened_by_hold = True
+                
+        if should_trigger:
+            try:
+                log_debug(u"Hold threshold met for hold_id={}. Triggering radial menu...".format(hold_id))
+            except:
+                pass
+            trigger_radial_menu(start_x, start_y)
+        else:
+            try:
+                log_debug(u"Hold cancelled or superceded for hold_id={}.".format(hold_id))
+            except:
+                pass
+    except BaseException as ex:
+        try:
+            log_debug(u"Exception in hold_detection_worker: {}".format(safe_str(ex)))
+        except:
+            pass
 
 # Modeless Event Handler for Revit API interactions
 try:
@@ -2735,7 +2756,6 @@ class RadialMenuWindow(Window):
                 cust_win.Closing += lambda s, e: self.on_customizer_window_closing(s, e)
                 
                 # Position next to the radial menu safely
-                import System
                 import System.Windows.Forms as winforms
                 from System.Windows import SystemParameters
                 
@@ -5801,7 +5821,7 @@ class RadialMenuWindow(Window):
             log_debug(u"Error in on_petal_mouse_up: {}".format(safe_str(ex)))
             args.Handled = True
 
-    def find_all_commands_safe(self):
+    def find_all_commands_safe(self, preloaded_sessionmgr_cmds=None):
         global _cached_commands
         with _cached_commands_lock:
             if _cached_commands is not None:
@@ -5814,16 +5834,19 @@ class RadialMenuWindow(Window):
         
         # 1. Try to load from sessionmgr
         try:
-            from pyrevit.loader import sessionmgr
-            all_cmds = sessionmgr.find_all_commands(cache=True)
-            log_debug(u"Found {} commands via sessionmgr.".format(len(all_cmds)))
-            for cmd in all_cmds:
-                uid = getattr(cmd, "unique_id", None)
-                if uid:
-                    if uid.lower() in unique_ids:
-                        continue
-                    cmds.append(cmd)
-                    unique_ids.add(uid.lower())
+            all_cmds = preloaded_sessionmgr_cmds
+            if all_cmds is None:
+                from pyrevit.loader import sessionmgr
+                all_cmds = sessionmgr.find_all_commands(cache=True)
+            log_debug(u"Found {} commands via sessionmgr.".format(len(all_cmds) if all_cmds else 0))
+            if all_cmds:
+                for cmd in all_cmds:
+                    uid = getattr(cmd, "unique_id", None)
+                    if uid:
+                        if uid.lower() in unique_ids:
+                            continue
+                        cmds.append(cmd)
+                        unique_ids.add(uid.lower())
         except Exception as ex:
             log_debug(u"Default find_all_commands failed ({}).".format(safe_str(ex)))
             
@@ -5919,14 +5942,22 @@ class RadialMenuWindow(Window):
             self._ribbon_commands = []
             log_debug(u"Error pre-loading Ribbon commands: {}".format(safe_str(ex)))
             
+        sessionmgr_cmds = []
+        try:
+            from pyrevit.loader import sessionmgr
+            sessionmgr_cmds = list(sessionmgr.find_all_commands(cache=True))
+            log_debug(u"Pre-loaded {} commands via sessionmgr on UI thread.".format(len(sessionmgr_cmds)))
+        except Exception as e_sm:
+            log_debug(u"Failed to pre-load sessionmgr commands on UI thread: {}".format(safe_str(e_sm)))
+            
         self._commands_worker_dispatcher = self.Dispatcher
-        t = threading.Thread(target=self._async_load_commands_worker)
+        t = threading.Thread(target=self._async_load_commands_worker, args=(sessionmgr_cmds,))
         t.daemon = True
         t.start()
 
-    def _async_load_commands_worker(self):
+    def _async_load_commands_worker(self, preloaded_sessionmgr_cmds=None):
         try:
-            all_cmds = self.find_all_commands_safe()
+            all_cmds = self.find_all_commands_safe(preloaded_sessionmgr_cmds)
             
             parsed_list = []
             seen_uids = set()
@@ -7925,7 +7956,9 @@ def hook_callback(nCode, wParam, lParam):
                     return 1  # Swallow right button up to prevent Revit context menu
                     
             elif wParam == 0x0200:  # WM_MOUSEMOVE
-                # Quick lockless check first to avoid overhead on every mouse movement
+                if not _is_holding:
+                    return user32.CallNextHookEx(_hook_id, nCode, wParam, lParam)
+                
                 is_holding_now = False
                 with _hold_lock:
                     is_holding_now = _is_holding
@@ -7939,9 +7972,12 @@ def hook_callback(nCode, wParam, lParam):
                         log_debug(u"Mouse moved (dx={}, dy={}). Cancelling hold.".format(dx, dy))
                         with _hold_lock:
                             _is_holding = False
-    except Exception as ex:
-        tb = safe_traceback()
-        log_debug(u"Python Exception in hook_callback: {}\n{}".format(safe_str(ex), tb))
+    except BaseException as ex:
+        try:
+            tb = safe_traceback()
+            log_debug(u"Exception in hook_callback: {}\n{}".format(safe_str(ex), tb))
+        except:
+            pass
     except System.Exception as ex:
         log_debug(u"CLR Exception in hook_callback: {}".format(safe_str(ex)))
         
