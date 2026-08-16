@@ -4,7 +4,7 @@
         Height="640" Width="640"
         WindowStyle="None"
         AllowsTransparency="True"
-        Background="#01FFFFFF"
+        Background="{x:Null}"
         Topmost="False"
         ShowInTaskbar="False"
         WindowStartupLocation="Manual"
@@ -848,7 +848,7 @@
                     Canvas.Left="275" Canvas.Top="275" 
                     CornerRadius="45" 
                     BorderThickness="1.5"
-                    Panel.ZIndex="100">
+                    Panel.ZIndex="90">
                 <Border.Background>
                     <RadialGradientBrush Center="0.5,0.5" GradientOrigin="0.5,0.3">
                         <GradientStop Color="#FF303035" Offset="0"/>
@@ -866,51 +866,56 @@
                 </Border.Effect>
             </Border>
 
-            <!-- ================= CORE BUTTONS (NORMAL MODE) ================= -->
-            <Button Name="BtnCoreClose" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935" Panel.ZIndex="100">
+            <!-- ================= CORE BUTTONS (NORMAL / PINNED MODE) ================= -->
+            <Button Name="BtnCorePinMove" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C" Visibility="Collapsed" ToolTip="Drag to Move Menu" Panel.ZIndex="100" Cursor="SizeAll">
                 <Canvas Width="640" Height="640">
-                    <StackPanel Name="BtnCoreClosePanel" Width="50" Height="40" VerticalAlignment="Center">
-                        <TextBlock Text="✕" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Close" Foreground="White" FontSize="8.5" HorizontalAlignment="Center"/>
-                    </StackPanel>
+                    <Grid Name="BtnCorePinMovePanel" Width="40" Height="40">
+                        <TextBlock Text="✥" Foreground="White" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
                 </Canvas>
             </Button>
-            <Button Name="BtnCoreSettings" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C" Panel.ZIndex="100">
+            <Button Name="BtnCoreClose" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935" ToolTip="Close" Panel.ZIndex="100">
                 <Canvas Width="640" Height="640">
-                    <StackPanel Name="BtnCoreSettingsPanel" Width="50" Height="40" VerticalAlignment="Center">
-                        <TextBlock Text="⚙" Foreground="White" FontSize="12" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Setup" Foreground="White" FontSize="8.5" HorizontalAlignment="Center"/>
-                    </StackPanel>
+                    <Grid Name="BtnCoreClosePanel" Width="40" Height="40">
+                        <TextBlock Text="✕" Foreground="White" FontSize="13" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                </Canvas>
+            </Button>
+            <Button Name="BtnCoreSettings" Style="{StaticResource CoreButtonStyle}" Background="#FF0083B0" ToolTip="Setup &amp; Appearance" Panel.ZIndex="100">
+                <Canvas Width="640" Height="640">
+                    <Grid Name="BtnCoreSettingsPanel" Width="40" Height="40">
+                        <TextBlock Text="⚙" Foreground="White" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
                 </Canvas>
             </Button>
 
             <!-- ================= CORE BUTTONS (SETTINGS MODE) ================= -->
             <Button Name="BtnCoreMove" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935" Visibility="Collapsed" ToolTip="Drag &amp; Drop" Panel.ZIndex="100">
                 <Canvas Width="640" Height="640">
-                    <StackPanel Name="BtnCoreMovePanel" Width="50" Height="40" VerticalAlignment="Center">
-                        <TextBlock Text="✥" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </StackPanel>
+                    <Grid Name="BtnCoreMovePanel" Width="40" Height="40">
+                        <TextBlock Text="✥" Foreground="White" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
                 </Canvas>
             </Button>
             <Button Name="BtnCorePool" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C" Visibility="Collapsed" ToolTip="Command Pool" Panel.ZIndex="100">
                 <Canvas Width="640" Height="640">
-                    <StackPanel Name="BtnCorePoolPanel" Width="50" Height="40" VerticalAlignment="Center">
-                        <TextBlock Text="📋" Foreground="White" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </StackPanel>
+                    <Grid Name="BtnCorePoolPanel" Width="40" Height="40">
+                        <TextBlock Text="📋" Foreground="White" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
                 </Canvas>
             </Button>
-            <Button Name="BtnCoreAppearance" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C" Visibility="Collapsed" ToolTip="Appearance &amp; Settings" Panel.ZIndex="100">
+            <Button Name="BtnCoreAppearance" Style="{StaticResource CoreButtonStyle}" Background="#FF55555C" Visibility="Collapsed" ToolTip="Settings &amp; Appearance" Panel.ZIndex="100">
                 <Canvas Width="640" Height="640">
-                    <StackPanel Name="BtnCoreAppearancePanel" Width="50" Height="40" VerticalAlignment="Center">
-                        <TextBlock Text="🎨" Foreground="White" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </StackPanel>
+                    <Grid Name="BtnCoreAppearancePanel" Width="40" Height="40">
+                        <TextBlock Text="🔧" Foreground="White" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
                 </Canvas>
             </Button>
             <Button Name="BtnCoreExit" Style="{StaticResource CoreButtonStyle}" Background="#FFE53935" Visibility="Collapsed" ToolTip="Exit Settings" Panel.ZIndex="100">
                 <Canvas Width="640" Height="640">
-                    <StackPanel Name="BtnCoreExitPanel" Width="50" Height="40" VerticalAlignment="Center">
-                        <TextBlock Text="✕" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </StackPanel>
+                    <Grid Name="BtnCoreExitPanel" Width="40" Height="40">
+                        <TextBlock Text="✕" Foreground="White" FontSize="13" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
                 </Canvas>
             </Button>
             <!-- Drag Preview Adorner (visible during drag-and-drop) -->
@@ -1428,7 +1433,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             
-                            <ScrollViewer Grid.Row="0" Background="Transparent" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Height="425">
+                            <ScrollViewer Grid.Row="0" Background="Transparent" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                 <StackPanel Margin="0,0,10,0">
                                     <!-- ComboBox: Trigger Mode -->
                                     <Grid Margin="0,0,0,10">
@@ -1499,6 +1504,16 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" Text="Gestures (Flick):" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
                                         <CheckBox Name="EnableGesturesCheckBox" Grid.Column="1" Content="Quick marking gesture on RMB drag" Foreground="{DynamicResource CustomizerText}" FontSize="11" VerticalAlignment="Center"/>
+                                    </Grid>
+
+                                    <!-- CheckBox: Keep Open After Execution -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Pin Menu:" Foreground="{DynamicResource CustomizerSecText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <CheckBox Name="KeepOpenCheckBox" Grid.Column="1" Content="Keep menu open after command (LMB mode)" Foreground="{DynamicResource CustomizerText}" FontSize="11" VerticalAlignment="Center"/>
                                     </Grid>
 
                                     <!-- Slider: Hold Delay -->
@@ -1666,6 +1681,39 @@
                                             <TextBox Name="HexBorderText" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="11" VerticalContentAlignment="Center"/>
                                         </Grid>
                                     </StackPanel>
+
+                                    <!-- Storage & Folders Section -->
+                                    <Border BorderBrush="{DynamicResource CustomizerSecText}" BorderThickness="0,1,0,0" Margin="0,12,0,10" Padding="0,8,0,0">
+                                        <TextBlock Text="Storage &amp; Folders" Foreground="{DynamicResource CustomizerHighlight}" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                    </Border>
+
+                                    <!-- Config Directory -->
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="28"/>
+                                            <ColumnDefinition Width="28"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Config Folder:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                        <TextBox Name="TxtConfigDir" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="10" VerticalContentAlignment="Center" ToolTip="Custom folder to store radial_menu_config.json (leave empty for default)"/>
+                                        <Button Name="BtnBrowseConfigDir" Grid.Column="2" Content="📁" Height="22" Margin="3,0,0,0" Background="#FF3E3E42" Foreground="White" BorderThickness="0" Cursor="Hand" ToolTip="Browse Folder" FontSize="11"/>
+                                        <Button Name="BtnResetConfigDir" Grid.Column="3" Content="↺" Height="22" Margin="3,0,0,0" Background="#FF3E3E42" Foreground="White" BorderThickness="0" Cursor="Hand" ToolTip="Reset to Default Folder" FontSize="12" FontWeight="Bold"/>
+                                    </Grid>
+
+                                    <!-- Icons Directory -->
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="105"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="28"/>
+                                            <ColumnDefinition Width="28"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Icons Folder:" Foreground="{DynamicResource CustomizerSecText}" FontSize="10.5" VerticalAlignment="Center"/>
+                                        <TextBox Name="TxtIconsDir" Grid.Column="1" Height="22" Background="{DynamicResource CustomizerInputBg}" Foreground="{DynamicResource CustomizerInputText}" BorderBrush="{DynamicResource CustomizerSecText}" FontSize="10" VerticalContentAlignment="Center" ToolTip="Custom folder for extracted ribbon icons (leave empty for default)"/>
+                                        <Button Name="BtnBrowseIconsDir" Grid.Column="2" Content="📁" Height="22" Margin="3,0,0,0" Background="#FF3E3E42" Foreground="White" BorderThickness="0" Cursor="Hand" ToolTip="Browse Folder" FontSize="11"/>
+                                        <Button Name="BtnResetIconsDir" Grid.Column="3" Content="↺" Height="22" Margin="3,0,0,0" Background="#FF3E3E42" Foreground="White" BorderThickness="0" Cursor="Hand" ToolTip="Reset to Default Folder" FontSize="12" FontWeight="Bold"/>
+                                    </Grid>
                                 </StackPanel>
                             </ScrollViewer>
                             

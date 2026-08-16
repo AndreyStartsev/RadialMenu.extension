@@ -1,60 +1,81 @@
 {
     "command_pool": [
         {
-            "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Sprinkler heith", 
-            "type": "pyrevit", 
-            "priority": 20, 
-            "name": "Sprinkler heith", 
-            "id": "item_1_4e3cc7f6", 
-            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerheith.dark.png", 
-            "level": 1, 
-            "parent": null, 
-            "context_rules": {}
-        }, 
-        {
             "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Sprinkler autosize", 
-            "type": "pyrevit", 
-            "priority": 10, 
-            "name": "Sprinkler Pipe Automatic Sizing", 
-            "id": "item_1_e9b69607", 
-            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerautosize.dark.png", 
-            "level": 1, 
             "parent": null, 
-            "context_rules": {}
+            "context_rules": {
+                "allowed_selection_states": [], 
+                "allowed_views": [
+                    "3D", 
+                    "Plan"
+                ], 
+                "allowed_classes": []
+            }, 
+            "id": "item_1_e9b69607", 
+            "type": "pyrevit", 
+            "level": 1, 
+            "priority": 80, 
+            "name": "Sprinkler Pipe Automatic Sizing", 
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerautosize.dark.png"
         }, 
         {
-            "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Test Dim", 
-            "type": "pyrevit", 
-            "priority": 30, 
-            "name": "Test Dim", 
-            "id": "item_3_b23e2f52", 
-            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestTestDim.dark.png", 
-            "level": 1, 
+            "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Sprinkler heith", 
             "parent": null, 
-            "context_rules": {}
+            "context_rules": {}, 
+            "id": "item_1_fbbf1e69", 
+            "type": "pyrevit", 
+            "level": 1, 
+            "priority": 40, 
+            "name": "Sprinkler heith", 
+            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerheith.dark.png"
+        }, 
+        {
+            "command": "ID_MEASURE_LINE", 
+            "parent": null, 
+            "context_rules": {}, 
+            "id": "ID_MEASURE_LINE", 
+            "type": "built_in", 
+            "level": 1, 
+            "priority": 10, 
+            "name": "Measure Between Two References", 
+            "icon": "G:\\Other computers\\My Laptop\\SKREP\\RadialMenu.extension\\RadialMenu.tab\\RadialMenu.panel\\ToggleRadialMenu.pushbutton\\extracted_icons\\ID_MEASURE_LINE.dark.png"
+        }, 
+        {
+            "command": "ID_MEASURE_PICK_LINES", 
+            "parent": null, 
+            "context_rules": {}, 
+            "id": "ID_MEASURE_PICK_LINES", 
+            "type": "built_in", 
+            "level": 1, 
+            "priority": 20, 
+            "name": "Measure Along an Element", 
+            "icon": "G:\\Other computers\\My Laptop\\SKREP\\RadialMenu.extension\\RadialMenu.tab\\RadialMenu.panel\\ToggleRadialMenu.pushbutton\\extracted_icons\\ID_MEASURE_PICK_LINES.dark.png"
         }
     ], 
     "settings": {
-        "color_scheme": "dark", 
-        "color_normal": "#F21E1E24", 
-        "color_border": "#25FFFFFF", 
-        "color_hover_end": "#FF004B66", 
+        "color_scheme": "auto", 
+        "color_normal": "#F22B2B2B", 
+        "custom_icons_dir": "", 
+        "color_border": "#40FFFFFF", 
+        "color_hover_end": "#FF1D3A56", 
         "animation_style": "fan", 
-        "color_hover_start": "#FF0083B0", 
-        "ring_gap": 5, 
-        "enable_gestures": true, 
-        "gap_width": 3.0, 
+        "color_hover_start": "#FF2B5E8C", 
+        "keep_open_after_execution": true, 
+        "ring_gap": 7, 
+        "enable_gestures": false, 
+        "gap_width": 8.0, 
         "enable_logging": false, 
-        "core_radius": 45, 
+        "core_radius": 37, 
         "l1_max_angle": 360, 
-        "l3_max_angle": 90, 
-        "petal_width": 60, 
+        "l3_max_angle": 45, 
+        "petal_width": 54, 
         "petal_opacity": 95, 
-        "l2_max_angle": 90, 
+        "l2_max_angle": 60, 
         "trigger_mode": "hold", 
         "gesture_threshold": 35, 
-        "hold_delay_ms": 200, 
+        "hold_delay_ms": 250, 
         "theme": "pyRevit Dark", 
+        "custom_config_dir": "", 
         "use_circles": false
     }
 }

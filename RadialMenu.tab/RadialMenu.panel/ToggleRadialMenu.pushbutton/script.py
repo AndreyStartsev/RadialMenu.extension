@@ -154,7 +154,125 @@ COMMON_REVIT_CLASSES = {
 # Debug Logger Setup
 LOG_FILE = os.path.join(os.path.dirname(__file__), "RadialMenu_debug.log")
 _ENABLE_LOGGING = True
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), "radial_menu_config.json")
+DEFAULT_CONFIG_FILE = os.path.join(os.path.dirname(__file__), "radial_menu_config.json")
+CONFIG_FILE = DEFAULT_CONFIG_FILE
+DEFAULT_ICONS_DIR = os.path.join(os.path.dirname(__file__), "extracted_icons")
+_cached_custom_icons_dir = None
+
+def get_effective_icons_dir():
+    global _cached_custom_icons_dir
+    if _cached_custom_icons_dir and os.path.exists(_cached_custom_icons_dir):
+        return _cached_custom_icons_dir
+    try:
+        if os.path.exists(DEFAULT_CONFIG_FILE):
+            with open(DEFAULT_CONFIG_FILE, "rb") as f:
+                d = json.loads(f.read().decode("utf-8"))
+                c_dir = d.get("settings", {}).get("custom_icons_dir", "").strip()
+                if c_dir:
+                    if not os.path.exists(c_dir):
+                        try:
+                            os.makedirs(c_dir)
+                        except:
+                            pass
+                    if os.path.exists(c_dir):
+                        _cached_custom_icons_dir = c_dir
+                        return c_dir
+    except:
+        pass
+    return DEFAULT_ICONS_DIR
+
+def set_effective_icons_dir(path):
+    global _cached_custom_icons_dir
+    _cached_custom_icons_dir = path.strip() if path else None
+
+def get_revit_version():
+    try:
+        from pyrevit import HOST_APP
+        if hasattr(HOST_APP, "version") and HOST_APP.version:
+            v_str = str(HOST_APP.version).strip()
+            if v_str:
+                return v_str
+    except:
+        pass
+    try:
+        from pyrevit import revit
+        if revit.doc and hasattr(revit.doc, "Application"):
+            return str(revit.doc.Application.VersionNumber).strip()
+    except:
+        pass
+    return "default"
+
+def get_effective_version_icons_dir(target_version=None):
+    base_dir = get_effective_icons_dir()
+    ver = target_version or get_revit_version()
+    if ver and ver != "default":
+        ver_dir = os.path.join(base_dir, ver)
+        return ver_dir
+    return base_dir
+
+def get_available_icon_versions():
+    """Returns a list of other Revit version folder names (e.g. ['2024', '2023']) that contain extracted icons."""
+    try:
+        icons_dir = get_effective_icons_dir()
+        if not os.path.exists(icons_dir):
+            return []
+        curr_ver = get_revit_version()
+        res = []
+        for name in os.listdir(icons_dir):
+            if name == curr_ver:
+                continue
+            sub_dir = os.path.join(icons_dir, name)
+            if os.path.isdir(sub_dir):
+                files = os.listdir(sub_dir)
+                pngs = [f for f in files if f.lower().endswith(".png")]
+                if len(pngs) >= 10:
+                    res.append(name)
+        # Sort descending (e.g. 2026, 2025, 2024...)
+        return sorted(res, reverse=True)
+    except:
+        return []
+
+def copy_icons_from_version(src_version, dest_version=None):
+    """Copies all PNG icons from src_version folder to dest_version (or current Revit version)."""
+    try:
+        icons_base = get_effective_icons_dir()
+        dest_ver = dest_version or get_revit_version()
+        src_dir = os.path.join(icons_base, src_version)
+        dest_dir = os.path.join(icons_base, dest_ver)
+        if not os.path.exists(src_dir):
+            return 0
+        if not os.path.exists(dest_dir):
+            os.makedirs(dest_dir)
+        import shutil
+        copied = 0
+        for fname in os.listdir(src_dir):
+            if fname.lower().endswith(".png"):
+                src_file = os.path.join(src_dir, fname)
+                dest_file = os.path.join(dest_dir, fname)
+                shutil.copy2(src_file, dest_file)
+                copied += 1
+        log_debug(u"Copied {} icons from Revit {} to Revit {}".format(copied, src_version, dest_ver))
+        return copied
+    except Exception as ex:
+        log_debug(u"Failed to copy icons between versions: {}".format(safe_str(ex)))
+        return 0
+
+def get_effective_config_path():
+    try:
+        if os.path.exists(DEFAULT_CONFIG_FILE):
+            with open(DEFAULT_CONFIG_FILE, "rb") as f:
+                d = json.loads(f.read().decode("utf-8"))
+                c_dir = d.get("settings", {}).get("custom_config_dir", "").strip()
+                if c_dir:
+                    if os.path.isdir(c_dir):
+                        custom_file = os.path.join(c_dir, "radial_menu_config.json")
+                    else:
+                        custom_file = c_dir
+                    if os.path.exists(custom_file):
+                        return custom_file
+    except:
+        pass
+    return DEFAULT_CONFIG_FILE
 
 # Default command pool - flat list with context rules per command
 DEFAULT_POOL = [
@@ -290,6 +408,7 @@ DEFAULT_SETTINGS = {
     "hold_delay_ms": 200,
     "trigger_mode": "hold",
     "enable_gestures": True,
+    "keep_open_after_execution": False,
     "gesture_threshold": 35,
     "use_circles": False,
     "animation_style": "fade",
@@ -306,7 +425,9 @@ DEFAULT_SETTINGS = {
     "color_border": "#25FFFFFF",
     "l2_max_angle": 90,
     "l3_max_angle": 90,
-    "petal_opacity": 95
+    "petal_opacity": 95,
+    "custom_config_dir": "",
+    "custom_icons_dir": ""
 }
 
 def apply_opacity_to_hex_color(hex_color, opacity_percent):
@@ -438,16 +559,45 @@ def resolve_themed_icon(icon_path):
     global _IS_MENU_DARK
     base, ext = os.path.splitext(icon_path)
     if ext.lower() == ".png":
+        eff_icons_dir = get_effective_icons_dir()
+        ver = get_revit_version()
+        fname = os.path.basename(icon_path)
+        base_name, _ = os.path.splitext(fname)
+        
         if _IS_MENU_DARK:
             if not base.endswith(".dark"):
-                dark_path = base + ".dark" + ext
-                if os.path.exists(dark_path):
-                    return dark_path
+                dark_fname = base_name + ".dark.png"
+                # 1. Check version subfolder
+                cand_ver = os.path.join(eff_icons_dir, ver, dark_fname)
+                if os.path.exists(cand_ver):
+                    return cand_ver
+                # 2. Check root icons folder
+                cand_root = os.path.join(eff_icons_dir, dark_fname)
+                if os.path.exists(cand_root):
+                    return cand_root
+                # 3. Check direct path / extension fallback
+                if os.path.isabs(base + ".dark.png") and os.path.exists(base + ".dark.png"):
+                    return base + ".dark.png"
+                cand_def = os.path.join(os.path.dirname(__file__), base + ".dark.png")
+                if os.path.exists(cand_def):
+                    return cand_def
         else:
             if base.endswith(".dark"):
-                light_path = base[:-5] + ext
-                if os.path.exists(light_path):
-                    return light_path
+                light_fname = base_name[:-5] + ".png" if base_name.endswith(".dark") else base_name + ".png"
+                # 1. Check version subfolder
+                cand_ver = os.path.join(eff_icons_dir, ver, light_fname)
+                if os.path.exists(cand_ver):
+                    return cand_ver
+                # 2. Check root icons folder
+                cand_root = os.path.join(eff_icons_dir, light_fname)
+                if os.path.exists(cand_root):
+                    return cand_root
+                # 3. Check direct path / extension fallback
+                if os.path.isabs(base[:-5] + ".png") and os.path.exists(base[:-5] + ".png"):
+                    return base[:-5] + ".png"
+                cand_def = os.path.join(os.path.dirname(__file__), base[:-5] + ".png")
+                if os.path.exists(cand_def):
+                    return cand_def
     return icon_path
 
 _bitmap_image_cache = {}
@@ -459,7 +609,23 @@ def load_bitmap_image_themed(img_path):
     try:
         abs_path = img_path
         if not os.path.isabs(abs_path):
-            abs_path = os.path.join(os.path.dirname(__file__), abs_path)
+            if abs_path.startswith("extracted_icons"):
+                custom_icons_dir = get_effective_icons_dir()
+                ver = get_revit_version()
+                rel = abs_path[len("extracted_icons"):].lstrip("\\/")
+                # 1. Check version subfolder
+                cand_ver = os.path.join(custom_icons_dir, ver, os.path.basename(rel))
+                if os.path.exists(cand_ver):
+                    abs_path = cand_ver
+                else:
+                    # 2. Check custom root icons folder
+                    cand_root = os.path.join(custom_icons_dir, rel)
+                    if os.path.exists(cand_root):
+                        abs_path = cand_root
+                    else:
+                        abs_path = os.path.join(os.path.dirname(__file__), abs_path)
+            else:
+                abs_path = os.path.join(os.path.dirname(__file__), abs_path)
             
         if not os.path.exists(abs_path):
             return None
@@ -471,22 +637,20 @@ def load_bitmap_image_themed(img_path):
         # Check modification time so modified icons update immediately
         mtime = os.path.getmtime(abs_path)
         if img_path in _bitmap_image_cache:
-            cached_mtime, cached_bi = _bitmap_image_cache[img_path]
-            if cached_mtime == mtime:
-                return cached_bi
+            val = _bitmap_image_cache[img_path]
+            if isinstance(val, tuple) and len(val) == 2:
+                cached_mtime, cached_bi = val
+                if cached_mtime == mtime and cached_bi is not None:
+                    return cached_bi
             
         from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption, BitmapCreateOptions
-        from System.IO import File, MemoryStream
-        
-        # Read all bytes into a MemoryStream to prevent file locking and ensure WPF has full data
-        bytes_data = File.ReadAllBytes(abs_path)
-        ms = MemoryStream(bytes_data)
+        from System import Uri
         
         bi = BitmapImage()
         bi.BeginInit()
+        bi.UriSource = Uri(abs_path)
         bi.CacheOption = BitmapCacheOption.OnLoad
         bi.CreateOptions = BitmapCreateOptions.IgnoreImageCache
-        bi.StreamSource = ms
         bi.EndInit()
         
         try:
@@ -590,7 +754,7 @@ def resolve_builtin_command(cmd_value):
         
     # 2. Check if cmd_value itself is a valid file name in extracted_icons
     safe_cmd = "".join([c for c in cmd_value if c.isalnum() or c in ("_", "-")]).strip()
-    icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
+    icons_dir = get_effective_icons_dir()
     local_png = os.path.join(icons_dir, safe_cmd + ".png")
     if os.path.exists(local_png):
         return cmd_value, safe_cmd
@@ -692,7 +856,7 @@ def extract_icons_from_ribbon(force_overwrite=False, progress_callback=None, com
         from System.Windows.Threading import DispatcherPriority
         from System import Action
         
-        icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
+        icons_dir = get_effective_version_icons_dir()
         if not os.path.exists(icons_dir):
             try:
                 os.makedirs(icons_dir)
@@ -707,7 +871,7 @@ def extract_icons_from_ribbon(force_overwrite=False, progress_callback=None, com
         global _IS_REVIT_DARK
         suffix = ".dark.png" if _IS_REVIT_DARK else ".png"
         
-        log_debug(u"Starting ribbon icon extraction on UI thread...")
+        log_debug(u"Starting ribbon icon extraction...")
         ribbon_ctrl = getattr(adWin.ComponentManager, "Ribbon", None)
         items_queue = []
         
@@ -728,7 +892,8 @@ def extract_icons_from_ribbon(force_overwrite=False, progress_callback=None, com
                             else:
                                 img = getattr(itm, "LargeImage", None) or getattr(itm, "Image", None) or getattr(itm, "SmallImage", None)
                                 if img:
-                                    items_queue.append((file_path, img))
+                                    display_txt = str(getattr(itm, "Text", "") or getattr(itm, "Name", "") or r_id_str).strip()
+                                    items_queue.append((file_path, img, display_txt))
                                     
                 # Recursively check all potential children collections
                 for child_prop in ["Items", "Panels", "Children", "Elements", "SubItems"]:
@@ -758,14 +923,16 @@ def extract_icons_from_ribbon(force_overwrite=False, progress_callback=None, com
                 completion_callback(0, skipped_count[0], 0)
             return
 
-        chunk_size = 25
+        chunk_size = 20
         idx_ref = [0]
 
         def process_batch():
             start_i = idx_ref[0]
             end_i = min(start_i + chunk_size, total_to_extract)
+            last_name = ""
             for i in range(start_i, end_i):
-                fpath, img = items_queue[i]
+                fpath, img, itm_name = items_queue[i]
+                last_name = itm_name
                 try:
                     if save_wpf_image_to_png(img, fpath):
                         saved_count[0] += 1
@@ -776,13 +943,12 @@ def extract_icons_from_ribbon(force_overwrite=False, progress_callback=None, com
             idx_ref[0] = end_i
 
             if progress_callback:
-                progress_callback(end_i, total_to_extract)
+                progress_callback(end_i, total_to_extract, last_name)
 
             if end_i < total_to_extract:
-                if _ui_dispatcher:
-                    _ui_dispatcher.BeginInvoke(DispatcherPriority.Background, Action(process_batch))
-                elif System.Windows.Application.Current:
-                    System.Windows.Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Background, Action(process_batch))
+                dispatcher = _ui_dispatcher or (System.Windows.Application.Current.Dispatcher if System.Windows.Application.Current else None)
+                if dispatcher:
+                    dispatcher.BeginInvoke(DispatcherPriority.Background, Action(process_batch))
             else:
                 global _bitmap_image_cache
                 _bitmap_image_cache.clear()
@@ -792,18 +958,486 @@ def extract_icons_from_ribbon(force_overwrite=False, progress_callback=None, com
                 if completion_callback:
                     completion_callback(saved_count[0], skipped_count[0], failed_count[0])
 
-        if _ui_dispatcher:
-            _ui_dispatcher.BeginInvoke(DispatcherPriority.Background, Action(process_batch))
-        elif System.Windows.Application.Current:
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Background, Action(process_batch))
+        dispatcher = _ui_dispatcher or (System.Windows.Application.Current.Dispatcher if System.Windows.Application.Current else None)
+        if dispatcher:
+            dispatcher.BeginInvoke(DispatcherPriority.Background, Action(process_batch))
     except Exception as ex:
         log_debug(u"Error in extract_icons_from_ribbon: {}".format(safe_str(ex)))
         if completion_callback:
             completion_callback(0, 0, 0)
 
-def check_and_suggest_icon_extraction(window):
-    # Left as a no-op to prevent blocking startup popups
-    pass
+class ExtractionProgressModal(System.Windows.Window):
+    """Sleek modal overlay window displayed during Ribbon icon extraction to block interaction and show live ETA."""
+    def __init__(self, owner_handle=None):
+        System.Windows.Window.__init__(self)
+        self.Title = "Extracting Ribbon Icons"
+        self.Width = 460
+        self.Height = 175
+        self.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen
+        self.WindowStyle = getattr(System.Windows.WindowStyle, "None")
+        self.AllowsTransparency = True
+        self.Background = System.Windows.Media.Brushes.Transparent
+        self.ResizeMode = System.Windows.ResizeMode.NoResize
+        self.Topmost = True
+        self.ShowInTaskbar = False
+        
+        if owner_handle:
+            try:
+                from System.Windows.Interop import WindowInteropHelper
+                helper = WindowInteropHelper(self)
+                helper.Owner = owner_handle
+            except:
+                pass
+
+        from System.Windows.Controls import Border, Grid, StackPanel, TextBlock, ProgressBar, RowDefinition, Orientation
+        from System.Windows.Media import ColorConverter, SolidColorBrush
+        from System.Windows.Media.Effects import DropShadowEffect
+        from System.Windows import Thickness, CornerRadius, HorizontalAlignment, VerticalAlignment, TextTrimming, FontWeights
+        
+        root_border = Border()
+        root_border.Background = SolidColorBrush(ColorConverter.ConvertFromString("#F8181822"))
+        root_border.CornerRadius = CornerRadius(12)
+        root_border.BorderBrush = SolidColorBrush(ColorConverter.ConvertFromString("#33FFFFFF"))
+        root_border.BorderThickness = Thickness(1)
+        root_border.Padding = Thickness(22, 16, 22, 16)
+        
+        shadow = DropShadowEffect()
+        shadow.BlurRadius = 30
+        shadow.ShadowDepth = 6
+        shadow.Color = ColorConverter.ConvertFromString("#000000")
+        shadow.Opacity = 0.8
+        root_border.Effect = shadow
+        
+        grid = Grid()
+        grid.RowDefinitions.Add(RowDefinition())
+        grid.RowDefinitions.Add(RowDefinition())
+        grid.RowDefinitions.Add(RowDefinition())
+        grid.RowDefinitions.Add(RowDefinition())
+        
+        # Row 0: Title Header
+        header_panel = StackPanel()
+        header_panel.Orientation = Orientation.Horizontal
+        header_panel.Margin = Thickness(0, 0, 0, 10)
+        Grid.SetRow(header_panel, 0)
+        
+        ico = TextBlock()
+        ico.Text = u"⚡"
+        ico.FontSize = 16
+        ico.Margin = Thickness(0, 0, 8, 0)
+        ico.VerticalAlignment = VerticalAlignment.Center
+        
+        lbl_title = TextBlock()
+        lbl_title.Text = u"Extracting Revit Ribbon Icons"
+        lbl_title.FontSize = 14
+        lbl_title.FontWeight = FontWeights.SemiBold
+        lbl_title.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFFF"))
+        lbl_title.VerticalAlignment = VerticalAlignment.Center
+        
+        header_panel.Children.Add(ico)
+        header_panel.Children.Add(lbl_title)
+        grid.Children.Add(header_panel)
+        
+        # Row 1: Item status
+        self.txt_item = TextBlock()
+        self.txt_item.Text = u"Scanning ribbon controls..."
+        self.txt_item.FontSize = 11
+        self.txt_item.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#99FFFFFF"))
+        self.txt_item.TextTrimming = TextTrimming.CharacterEllipsis
+        self.txt_item.Margin = Thickness(0, 0, 0, 8)
+        Grid.SetRow(self.txt_item, 1)
+        grid.Children.Add(self.txt_item)
+        
+        # Row 2: Progress Bar
+        pbar_border = Border()
+        pbar_border.CornerRadius = CornerRadius(4)
+        pbar_border.Background = SolidColorBrush(ColorConverter.ConvertFromString("#20FFFFFF"))
+        pbar_border.Height = 8
+        pbar_border.Margin = Thickness(0, 0, 0, 8)
+        pbar_border.ClipToBounds = True
+        
+        self.pbar = ProgressBar()
+        self.pbar.Minimum = 0
+        self.pbar.Maximum = 100
+        self.pbar.Value = 0
+        self.pbar.Height = 8
+        self.pbar.BorderThickness = Thickness(0)
+        self.pbar.Background = System.Windows.Media.Brushes.Transparent
+        self.pbar.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#FF00D2FF"))
+        
+        pbar_border.Child = self.pbar
+        Grid.SetRow(pbar_border, 2)
+        grid.Children.Add(pbar_border)
+        
+        # Row 3: Metrics (Count & % on left, ETA & Speed on right)
+        metrics_grid = Grid()
+        Grid.SetRow(metrics_grid, 3)
+        
+        self.txt_count = TextBlock()
+        self.txt_count.Text = u"0 / 0 (0%)"
+        self.txt_count.FontSize = 11
+        self.txt_count.FontWeight = FontWeights.Medium
+        self.txt_count.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFFF"))
+        self.txt_count.HorizontalAlignment = HorizontalAlignment.Left
+        
+        self.txt_eta = TextBlock()
+        self.txt_eta.Text = u"Computing ETA..."
+        self.txt_eta.FontSize = 11
+        self.txt_eta.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#00E5FF"))
+        self.txt_eta.HorizontalAlignment = HorizontalAlignment.Right
+        
+        metrics_grid.Children.Add(self.txt_count)
+        metrics_grid.Children.Add(self.txt_eta)
+        grid.Children.Add(metrics_grid)
+        
+        root_border.Child = grid
+        self.Content = root_border
+
+def is_icon_extraction_needed():
+    try:
+        import os
+        icons_dir = get_effective_icons_dir()
+        ver = get_revit_version()
+        ver_dir = os.path.join(icons_dir, ver)
+        
+        global _IS_REVIT_DARK
+        def count_matching(d):
+            if not os.path.exists(d):
+                return 0
+            files = os.listdir(d)
+            if _IS_REVIT_DARK:
+                return len([f for f in files if f.endswith(".dark.png")])
+            else:
+                return len([f for f in files if f.endswith(".png") and not f.endswith(".dark.png")])
+                
+        # 1. Check current version folder
+        if count_matching(ver_dir) >= 20:
+            return False
+            
+        # 2. Check root icons folder (legacy fallback)
+        if count_matching(icons_dir) >= 20:
+            return False
+            
+        return True
+    except:
+        return False
+
+class ExtractionSummaryModal(System.Windows.Window):
+    """Sleek modal window displayed after Ribbon icon extraction with summary metrics."""
+    def __init__(self, saved, skipped, failed, duration_sec, is_dark_theme, owner_handle=None):
+        System.Windows.Window.__init__(self)
+        self.Title = "Extraction Complete"
+        self.Width = 440
+        self.Height = 270
+        self.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen
+        self.WindowStyle = getattr(System.Windows.WindowStyle, "None")
+        self.AllowsTransparency = True
+        self.Background = System.Windows.Media.Brushes.Transparent
+        self.ResizeMode = System.Windows.ResizeMode.NoResize
+        self.Topmost = True
+        self.ShowInTaskbar = False
+        
+        if owner_handle:
+            try:
+                from System.Windows.Interop import WindowInteropHelper
+                helper = WindowInteropHelper(self)
+                helper.Owner = owner_handle
+            except:
+                pass
+
+        from System.Windows.Controls import Border, Grid, StackPanel, TextBlock, Button, RowDefinition, Orientation
+        from System.Windows.Media import ColorConverter, SolidColorBrush
+        from System.Windows.Media.Effects import DropShadowEffect
+        from System.Windows import Thickness, CornerRadius, HorizontalAlignment, VerticalAlignment, FontWeights
+        
+        root_border = Border()
+        root_border.Background = SolidColorBrush(ColorConverter.ConvertFromString("#F8181822"))
+        root_border.CornerRadius = CornerRadius(14)
+        root_border.BorderBrush = SolidColorBrush(ColorConverter.ConvertFromString("#33FFFFFF"))
+        root_border.BorderThickness = Thickness(1)
+        root_border.Padding = Thickness(24, 20, 24, 20)
+        
+        shadow = DropShadowEffect()
+        shadow.BlurRadius = 35
+        shadow.ShadowDepth = 8
+        shadow.Color = ColorConverter.ConvertFromString("#000000")
+        shadow.Opacity = 0.85
+        root_border.Effect = shadow
+        
+        grid = Grid()
+        grid.RowDefinitions.Add(RowDefinition())
+        grid.RowDefinitions.Add(RowDefinition())
+        grid.RowDefinitions.Add(RowDefinition())
+        
+        # Row 0: Header
+        header_panel = StackPanel()
+        header_panel.Orientation = Orientation.Horizontal
+        header_panel.Margin = Thickness(0, 0, 0, 16)
+        Grid.SetRow(header_panel, 0)
+        
+        badge = Border()
+        badge.Width = 28
+        badge.Height = 28
+        badge.CornerRadius = CornerRadius(14)
+        badge.Background = SolidColorBrush(ColorConverter.ConvertFromString("#2500E676"))
+        badge.BorderBrush = SolidColorBrush(ColorConverter.ConvertFromString("#FF00E676"))
+        badge.BorderThickness = Thickness(1.5)
+        badge.Margin = Thickness(0, 0, 10, 0)
+        
+        badge_txt = TextBlock()
+        badge_txt.Text = u"✓"
+        badge_txt.FontSize = 14
+        badge_txt.FontWeight = FontWeights.Bold
+        badge_txt.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#FF00E676"))
+        badge_txt.HorizontalAlignment = HorizontalAlignment.Center
+        badge_txt.VerticalAlignment = VerticalAlignment.Center
+        badge.Child = badge_txt
+        
+        lbl_title = TextBlock()
+        lbl_title.Text = u"Extraction Complete"
+        lbl_title.FontSize = 16
+        lbl_title.FontWeight = FontWeights.SemiBold
+        lbl_title.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFFF"))
+        lbl_title.VerticalAlignment = VerticalAlignment.Center
+        
+        header_panel.Children.Add(badge)
+        header_panel.Children.Add(lbl_title)
+        grid.Children.Add(header_panel)
+        
+        # Row 1: Stats summary
+        stats_card = Border()
+        stats_card.Background = SolidColorBrush(ColorConverter.ConvertFromString("#15FFFFFF"))
+        stats_card.CornerRadius = CornerRadius(8)
+        stats_card.Padding = Thickness(14, 10, 14, 10)
+        stats_card.Margin = Thickness(0, 0, 0, 16)
+        Grid.SetRow(stats_card, 1)
+        
+        stats_stack = StackPanel()
+        
+        def add_stat_row(label, val, val_color="#FFFFFF"):
+            row = Grid()
+            row.Margin = Thickness(0, 3, 0, 3)
+            lbl = TextBlock()
+            lbl.Text = label
+            lbl.FontSize = 12
+            lbl.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#99FFFFFF"))
+            lbl.HorizontalAlignment = HorizontalAlignment.Left
+            
+            v = TextBlock()
+            v.Text = str(val)
+            v.FontSize = 12
+            v.FontWeight = FontWeights.Medium
+            v.Foreground = SolidColorBrush(ColorConverter.ConvertFromString(val_color))
+            v.HorizontalAlignment = HorizontalAlignment.Right
+            
+            row.Children.Add(lbl)
+            row.Children.Add(v)
+            stats_stack.Children.Add(row)
+            
+        theme_name = u"Dark (*.dark.png)" if is_dark_theme else u"Light (*.png)"
+        add_stat_row(u"Extracted Icons", u"{} icons".format(saved), "#00D2FF")
+        add_stat_row(u"Skipped (Cached)", u"{} icons".format(skipped), "#AAAAAA")
+        if failed > 0:
+            add_stat_row(u"Failed", str(failed), "#FF5252")
+        add_stat_row(u"Active Theme", theme_name, "#FFFFFF")
+        add_stat_row(u"Time Elapsed", u"{:.1f} sec".format(duration_sec), "#00E676")
+        
+        stats_card.Child = stats_stack
+        grid.Children.Add(stats_card)
+        
+        # Row 2: OK Button
+        btn_ok = Button()
+        btn_ok.Content = u"OK"
+        btn_ok.Width = 100
+        btn_ok.Height = 32
+        btn_ok.HorizontalAlignment = HorizontalAlignment.Right
+        btn_ok.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF00A2D3"))
+        btn_ok.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFFF"))
+        btn_ok.BorderThickness = Thickness(0)
+        btn_ok.FontWeight = FontWeights.SemiBold
+        btn_ok.FontSize = 12
+        btn_ok.Cursor = System.Windows.Input.Cursors.Hand
+        btn_ok.Click += lambda s, e: self.Close()
+        Grid.SetRow(btn_ok, 2)
+        grid.Children.Add(btn_ok)
+        
+        self.KeyDown += lambda s, e: self.Close() if e.Key in [System.Windows.Input.Key.Enter, System.Windows.Input.Key.Escape] else None
+        
+        root_border.Child = grid
+        self.Content = root_border
+
+class ExtractionPromptModal(System.Windows.Window):
+    """Sleek modal warning window asking the user to extract ribbon icons or use icons from another Revit version."""
+    def __init__(self, is_dark_theme, curr_version="default", available_versions=None, on_extract_callback=None, on_use_version_callback=None, owner_handle=None):
+        System.Windows.Window.__init__(self)
+        self.Title = "Ribbon Icons Missing"
+        self.Width = 520
+        self.Height = 250
+        self.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen
+        self.WindowStyle = getattr(System.Windows.WindowStyle, "None")
+        self.AllowsTransparency = True
+        self.Background = System.Windows.Media.Brushes.Transparent
+        self.ResizeMode = System.Windows.ResizeMode.NoResize
+        self.Topmost = True
+        self.ShowInTaskbar = False
+        
+        self._on_extract_callback = on_extract_callback
+        self._on_use_version_callback = on_use_version_callback
+        
+        if owner_handle:
+            try:
+                from System.Windows.Interop import WindowInteropHelper
+                helper = WindowInteropHelper(self)
+                helper.Owner = owner_handle
+            except:
+                pass
+
+        from System.Windows.Controls import Border, Grid, StackPanel, TextBlock, Button, RowDefinition, Orientation
+        from System.Windows.Media import ColorConverter, SolidColorBrush
+        from System.Windows.Media.Effects import DropShadowEffect
+        from System.Windows import Thickness, CornerRadius, HorizontalAlignment, VerticalAlignment, FontWeights, TextWrapping
+        
+        root_border = Border()
+        root_border.Background = SolidColorBrush(ColorConverter.ConvertFromString("#F8181822"))
+        root_border.CornerRadius = CornerRadius(14)
+        root_border.BorderBrush = SolidColorBrush(ColorConverter.ConvertFromString("#33FFFFFF"))
+        root_border.BorderThickness = Thickness(1)
+        root_border.Padding = Thickness(24, 20, 24, 20)
+        
+        shadow = DropShadowEffect()
+        shadow.BlurRadius = 35
+        shadow.ShadowDepth = 8
+        shadow.Color = ColorConverter.ConvertFromString("#000000")
+        shadow.Opacity = 0.85
+        root_border.Effect = shadow
+        
+        grid = Grid()
+        grid.RowDefinitions.Add(RowDefinition())
+        grid.RowDefinitions.Add(RowDefinition())
+        grid.RowDefinitions.Add(RowDefinition())
+        
+        # Row 0: Header
+        header_panel = StackPanel()
+        header_panel.Orientation = Orientation.Horizontal
+        header_panel.Margin = Thickness(0, 0, 0, 14)
+        Grid.SetRow(header_panel, 0)
+        
+        badge = Border()
+        badge.Width = 28
+        badge.Height = 28
+        badge.CornerRadius = CornerRadius(14)
+        badge.Background = SolidColorBrush(ColorConverter.ConvertFromString("#25FFB300"))
+        badge.BorderBrush = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFB300"))
+        badge.BorderThickness = Thickness(1.5)
+        badge.Margin = Thickness(0, 0, 10, 0)
+        
+        badge_txt = TextBlock()
+        badge_txt.Text = u"!"
+        badge_txt.FontSize = 15
+        badge_txt.FontWeight = FontWeights.Bold
+        badge_txt.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFB300"))
+        badge_txt.HorizontalAlignment = HorizontalAlignment.Center
+        badge_txt.VerticalAlignment = VerticalAlignment.Center
+        badge.Child = badge_txt
+        
+        lbl_title = TextBlock()
+        lbl_title.Text = u"Ribbon Icons Missing • Revit {}".format(curr_version)
+        lbl_title.FontSize = 16
+        lbl_title.FontWeight = FontWeights.SemiBold
+        lbl_title.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFFF"))
+        lbl_title.VerticalAlignment = VerticalAlignment.Center
+        
+        header_panel.Children.Add(badge)
+        header_panel.Children.Add(lbl_title)
+        grid.Children.Add(header_panel)
+        
+        # Row 1: Description
+        theme_str = u"Dark" if is_dark_theme else u"Light"
+        body_panel = StackPanel()
+        body_panel.Margin = Thickness(0, 0, 0, 18)
+        Grid.SetRow(body_panel, 1)
+        
+        desc_text = u"Revit Ribbon icons for Revit {} ({} theme) have not been extracted yet.".format(curr_version, theme_str)
+        if available_versions:
+            avail_str = u", ".join([u"Revit " + v for v in available_versions])
+            desc_text += u"\n\nExisting icon pack detected from: {}.\nYou can extract fresh native icons or immediately use icons from that version.".format(avail_str)
+        else:
+            desc_text += u"\n\nExtracting them now will enable crisp native icons for all tools in the Radial Menu."
+            
+        txt_desc = TextBlock()
+        txt_desc.Text = desc_text
+        txt_desc.FontSize = 12
+        txt_desc.LineHeight = 18
+        txt_desc.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#CCFFFFFF"))
+        txt_desc.TextWrapping = TextWrapping.Wrap
+        body_panel.Children.Add(txt_desc)
+        grid.Children.Add(body_panel)
+        
+        # Row 2: Action Buttons
+        btn_panel = StackPanel()
+        btn_panel.Orientation = Orientation.Horizontal
+        btn_panel.HorizontalAlignment = HorizontalAlignment.Right
+        Grid.SetRow(btn_panel, 2)
+        
+        btn_later = Button()
+        btn_later.Content = u"Later"
+        btn_later.Width = 80
+        btn_later.Height = 32
+        btn_later.Margin = Thickness(0, 0, 8, 0)
+        btn_later.Background = SolidColorBrush(ColorConverter.ConvertFromString("#20FFFFFF"))
+        btn_later.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#CCCCCC"))
+        btn_later.BorderThickness = Thickness(0)
+        btn_later.FontSize = 12
+        btn_later.Cursor = System.Windows.Input.Cursors.Hand
+        btn_later.Click += lambda s, e: self.Close()
+        btn_panel.Children.Add(btn_later)
+        
+        if available_versions:
+            first_ver = available_versions[0]
+            btn_use_other = Button()
+            btn_use_other.Content = u"Use from Revit {}".format(first_ver)
+            btn_use_other.Height = 32
+            btn_use_other.Padding = Thickness(14, 0, 14, 0)
+            btn_use_other.Margin = Thickness(0, 0, 8, 0)
+            btn_use_other.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF0083B0"))
+            btn_use_other.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFFF"))
+            btn_use_other.BorderThickness = Thickness(0)
+            btn_use_other.FontWeight = FontWeights.SemiBold
+            btn_use_other.FontSize = 12
+            btn_use_other.Cursor = System.Windows.Input.Cursors.Hand
+            
+            def on_use_click(s, e):
+                self.Close()
+                if self._on_use_version_callback:
+                    self._on_use_version_callback(first_ver)
+                    
+            btn_use_other.Click += on_use_click
+            btn_panel.Children.Add(btn_use_other)
+            
+        btn_extract = Button()
+        btn_extract.Content = u"Extract for {}".format(curr_version)
+        btn_extract.Height = 32
+        btn_extract.Padding = Thickness(14, 0, 14, 0)
+        btn_extract.Background = SolidColorBrush(ColorConverter.ConvertFromString("#FF00A2D3"))
+        btn_extract.Foreground = SolidColorBrush(ColorConverter.ConvertFromString("#FFFFFF"))
+        btn_extract.BorderThickness = Thickness(0)
+        btn_extract.FontWeight = FontWeights.SemiBold
+        btn_extract.FontSize = 12
+        btn_extract.Cursor = System.Windows.Input.Cursors.Hand
+        
+        def on_extract_click(s, e):
+            self.Close()
+            if self._on_extract_callback:
+                self._on_extract_callback()
+                
+        btn_extract.Click += on_extract_click
+        btn_panel.Children.Add(btn_extract)
+        
+        grid.Children.Add(btn_panel)
+        
+        self.KeyDown += lambda s, e: self.Close() if e.Key == System.Windows.Input.Key.Escape else None
+        
+        root_border.Child = grid
+        self.Content = root_border
 
 
 def migrate_old_config(data):
@@ -882,8 +1516,9 @@ def load_config():
         "command_pool": list(DEFAULT_POOL)
     }
     try:
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, "rb") as f:
+        eff_config_file = get_effective_config_path()
+        if os.path.exists(eff_config_file):
+            with open(eff_config_file, "rb") as f:
                 content = f.read().decode("utf-8")
                 data = json.loads(content)
                 
@@ -949,6 +1584,7 @@ def load_config():
                         save_config(data)
                 
                 _ENABLE_LOGGING = data.get("settings", {}).get("enable_logging", False)
+                set_effective_icons_dir(data.get("settings", {}).get("custom_icons_dir", ""))
                 return data
     except Exception as ex:
         log_debug(u"Failed to load config: {}".format(safe_str(ex)))
@@ -960,8 +1596,28 @@ def save_config(config_data):
         global _ENABLE_LOGGING
         _ENABLE_LOGGING = config_data.get("settings", {}).get("enable_logging", False)
         content = json.dumps(config_data, indent=4)
-        with open(CONFIG_FILE, "wb") as f:
+        
+        # 1. Save to default base config
+        with open(DEFAULT_CONFIG_FILE, "wb") as f:
             f.write(content.encode("utf-8"))
+            
+        # 2. Save to custom config folder if configured
+        custom_dir = config_data.get("settings", {}).get("custom_config_dir", "").strip()
+        if custom_dir:
+            try:
+                if not os.path.exists(custom_dir):
+                    os.makedirs(custom_dir)
+                custom_file = os.path.join(custom_dir, "radial_menu_config.json") if os.path.isdir(custom_dir) else custom_dir
+                if os.path.abspath(custom_file) != os.path.abspath(DEFAULT_CONFIG_FILE):
+                    with open(custom_file, "wb") as f2:
+                        f2.write(content.encode("utf-8"))
+            except Exception as cf_ex:
+                log_debug(u"Failed to save custom config path: {}".format(safe_str(cf_ex)))
+                
+        # 3. Update cached icons dir
+        custom_icons = config_data.get("settings", {}).get("custom_icons_dir", "").strip()
+        set_effective_icons_dir(custom_icons)
+        
         log_debug(u"Configuration saved successfully.")
     except Exception as ex:
         log_debug(u"Failed to save config: {}".format(safe_str(ex)))
@@ -1241,6 +1897,16 @@ try:
                     log_debug(u"Error in Revit Event Execution (CLR Exception): " + safe_str(ex))
                 finally:
                     self._action = None
+                    try:
+                        active_win = get_active_window()
+                        if active_win and not getattr(active_win, "customizer_mode", False):
+                            if _ui_dispatcher:
+                                from System import Action
+                                _ui_dispatcher.BeginInvoke(Action(lambda: active_win.refresh_context_and_layout()))
+                            else:
+                                active_win.refresh_context_and_layout()
+                    except:
+                        pass
     
         def GetName(self):
             return "Radial Menu Modeless Event Handler"
@@ -2196,23 +2862,44 @@ class RadialMenuWindow(Window):
                 self.BtnExportConfig.Click += self.on_export_config_clicked
             if hasattr(self, "BtnImportConfig") and self.BtnImportConfig:
                 self.BtnImportConfig.Click += self.on_import_config_clicked
+            if hasattr(self, "BtnBrowseConfigDir") and self.BtnBrowseConfigDir:
+                self.BtnBrowseConfigDir.Click += self.on_browse_config_dir_clicked
+            if hasattr(self, "BtnResetConfigDir") and self.BtnResetConfigDir:
+                self.BtnResetConfigDir.Click += self.on_reset_config_dir_clicked
+            if hasattr(self, "BtnBrowseIconsDir") and self.BtnBrowseIconsDir:
+                self.BtnBrowseIconsDir.Click += self.on_browse_icons_dir_clicked
+            if hasattr(self, "BtnResetIconsDir") and self.BtnResetIconsDir:
+                self.BtnResetIconsDir.Click += self.on_reset_icons_dir_clicked
+            if hasattr(self, "TxtConfigDir") and self.TxtConfigDir:
+                self.TxtConfigDir.LostFocus += self.on_custom_paths_text_changed
+            if hasattr(self, "TxtIconsDir") and self.TxtIconsDir:
+                self.TxtIconsDir.LostFocus += self.on_custom_paths_text_changed
 
-            # Connect hover events dynamically for Level 1 & 2
+            # Connect hover events dynamically for Level 1, 2, & 3
             for idx in range(1, 11):
                 btn1 = getattr(self, "BtnL1_{}".format(idx), None)
                 if btn1:
                     btn1.MouseEnter += self.on_level1_hover
+                    btn1.MouseLeave += self.on_sector_leave
                 btn2 = getattr(self, "BtnL2_{}".format(idx), None)
                 if btn2:
                     btn2.MouseEnter += self.on_level2_hover
+                    btn2.MouseLeave += self.on_sector_leave
+                btn3 = getattr(self, "BtnL3_{}".format(idx), None)
+                if btn3:
+                    btn3.MouseEnter += self.on_level3_hover
+                    btn3.MouseLeave += self.on_sector_leave
 
-            # Center buttons hover should collapse open submenus
-            self.BtnCoreClose.MouseEnter += lambda s, e: self.hide_level2()
-            self.BtnCoreSettings.MouseEnter += lambda s, e: self.hide_level2()
-            self.BtnCoreMove.MouseEnter += lambda s, e: self.hide_level2()
-            self.BtnCorePool.MouseEnter += lambda s, e: self.hide_level2()
-            self.BtnCoreAppearance.MouseEnter += lambda s, e: self.hide_level2()
-            self.BtnCoreExit.MouseEnter += lambda s, e: self.hide_level2()
+            # Center buttons hover should collapse open submenus and clear hovered item
+            if hasattr(self, "BtnCorePinMove") and self.BtnCorePinMove:
+                self.BtnCorePinMove.MouseEnter += self.on_center_core_hover
+                self.BtnCorePinMove.PreviewMouseLeftButtonDown += self.on_pin_move_mouse_down
+            self.BtnCoreClose.MouseEnter += self.on_center_core_hover
+            self.BtnCoreSettings.MouseEnter += self.on_center_core_hover
+            self.BtnCoreMove.MouseEnter += self.on_center_core_hover
+            self.BtnCorePool.MouseEnter += self.on_center_core_hover
+            self.BtnCoreAppearance.MouseEnter += self.on_center_core_hover
+            self.BtnCoreExit.MouseEnter += self.on_center_core_hover
 
             log_debug(u"Connected button Click and Hover events.")
             
@@ -2237,13 +2924,82 @@ class RadialMenuWindow(Window):
                     btn.Drop += self.on_button_drop
             self.cache_revit_context()
             
+            # Setup background context polling timer for on-the-fly rebuilds in pinned/open mode
+            try:
+                from System.Windows.Threading import DispatcherTimer
+                from System import TimeSpan
+                self._context_poll_timer = DispatcherTimer()
+                self._context_poll_timer.Interval = TimeSpan.FromMilliseconds(400)
+                self._context_poll_timer.Tick += self.on_context_poll_tick
+                self._context_poll_timer.Start()
+            except Exception as e_timer:
+                log_debug("Failed to start _context_poll_timer: " + safe_str(e_timer))
+            
         except Exception as ex:
             log_debug(u"Exception connecting Click events: {}".format(safe_str(ex)))
             raise
 
+    def on_context_poll_tick(self, sender, args):
+        try:
+            from System.Windows import Visibility
+            if self.Visibility != Visibility.Visible or getattr(self, "customizer_mode", False) or getattr(self, "_move_mode_active", False):
+                return
+            
+            # Check if Revit selection state or active view category changed
+            old_state = getattr(self, "_cached_selection_state", "None")
+            old_view = getattr(self, "_cached_view_category", "Plan")
+            
+            cur_state = get_current_selection_state()
+            cur_view = "Plan"
+            try:
+                uiapp = HOST_APP.uiapp
+                if uiapp and uiapp.ActiveUIDocument and uiapp.ActiveUIDocument.ActiveView:
+                    from Autodesk.Revit.DB import ViewType
+                    vt = uiapp.ActiveUIDocument.ActiveView.ViewType
+                    if vt in [ViewType.ThreeD]:
+                        cur_view = "3D"
+                    elif vt in [ViewType.DrawingSheet]:
+                        cur_view = "Sheet"
+            except:
+                pass
+                
+            if cur_state != old_state or cur_view != old_view:
+                log_debug(u"Dynamic context change detected (state: {}->{}, view: {}->{}). Refreshing petals.".format(old_state, cur_state, old_view, cur_view))
+                self.refresh_context_and_layout()
+        except:
+            pass
+
+    def refresh_context_and_layout(self):
+        try:
+            if getattr(self, "customizer_mode", False):
+                return
+            self.cache_revit_context()
+            self.load_layout_configuration()
+            self.update_radial_geometry()
+        except Exception as ex:
+            log_debug(u"Error in refresh_context_and_layout: {}".format(safe_str(ex)))
+
+    def on_pin_move_mouse_down(self, sender, args):
+        try:
+            import System.Windows.Input as wpf_input
+            if args.LeftButton == wpf_input.MouseButtonState.Pressed:
+                log_debug(u"BtnCorePinMove pressed: starting DragMove.")
+                self.DragMove()
+        except Exception as ex:
+            log_debug("DragMove error: " + safe_str(ex))
+
+    def on_center_core_hover(self, sender, args):
+        self._hovered_pool_item = None
+        self._hovered_button_name = None
+        self._hovered_core_button = sender.Name
+        self.hide_level2()
+
     def on_level1_hover(self, sender, args):
         try:
+            self._hovered_core_button = None
             pool_item = getattr(self, "_button_to_pool_item", {}).get(sender.Name)
+            self._hovered_pool_item = pool_item
+            self._hovered_button_name = sender.Name
             if pool_item:
                 cmd_value = pool_item.get("command")
                 if cmd_value in ["submenu1", "submenu2"]:
@@ -2267,7 +3023,10 @@ class RadialMenuWindow(Window):
 
     def on_level2_hover(self, sender, args):
         try:
+            self._hovered_core_button = None
             pool_item = getattr(self, "_button_to_pool_item", {}).get(sender.Name)
+            self._hovered_pool_item = pool_item
+            self._hovered_button_name = sender.Name
             if pool_item:
                 cmd_value = pool_item.get("command")
                 if cmd_value in ["submenu1", "submenu2"]:
@@ -2287,6 +3046,25 @@ class RadialMenuWindow(Window):
                 self.hide_level3()
         except Exception as ex:
             log_debug(u"Error in on_level2_hover: {}".format(safe_str(ex)))
+
+    def on_level3_hover(self, sender, args):
+        try:
+            self._hovered_core_button = None
+            pool_item = getattr(self, "_button_to_pool_item", {}).get(sender.Name)
+            self._hovered_pool_item = pool_item
+            self._hovered_button_name = sender.Name
+        except Exception as ex:
+            log_debug(u"Error in on_level3_hover: {}".format(safe_str(ex)))
+
+    def on_sector_leave(self, sender, args):
+        try:
+            if getattr(self, "_hovered_button_name", None) == sender.Name:
+                self._hovered_pool_item = None
+                self._hovered_button_name = None
+            if getattr(self, "_hovered_core_button", None) == sender.Name:
+                self._hovered_core_button = None
+        except:
+            pass
 
     def toggle_level2(self):
         try:
@@ -2763,43 +3541,41 @@ class RadialMenuWindow(Window):
             img_path = None
             is_image = False
             
-            if icon_type == "pyrevit" and icon_value:
+            if icon_value and (icon_value.lower().endswith(".png") or os.path.sep in icon_value or "/" in icon_value):
+                img_path = resolve_themed_icon(icon_value)
+                is_image = True
+            elif icon_type == "pyrevit" and icon_value:
                 img_path = resolve_themed_icon(icon_value)
                 is_image = True
             elif icon_type == "built_in":
-                # Check if icon_value is a file path
-                if icon_value and (icon_value.lower().endswith(".png") or os.path.sep in icon_value or "/" in icon_value):
-                    img_path = resolve_themed_icon(icon_value)
-                    is_image = True
-                else:
-                    # Try to resolve extracted native Revit Ribbon icon
-                    pool_item = getattr(self, "_button_to_pool_item", {}).get(btn_name)
-                    cmd_val = pool_item.get("command") if pool_item else None
-                    if cmd_val:
-                        _, resolved_icon = resolve_builtin_command(cmd_val)
-                        icon_name = resolved_icon or "".join([c for c in cmd_val if c.isalnum() or c in ("_", "-")]).strip()
-                        local_png = os.path.join(os.path.dirname(__file__), "extracted_icons", icon_name + ".png")
-                        if os.path.exists(local_png):
-                            img_path = resolve_themed_icon(local_png)
-                            is_image = True
+                # Try to resolve extracted native Revit Ribbon icon
+                pool_item = getattr(self, "_button_to_pool_item", {}).get(btn_name)
+                cmd_val = pool_item.get("command") if pool_item else None
+                if cmd_val:
+                    _, resolved_icon = resolve_builtin_command(cmd_val)
+                    icon_name = resolved_icon or "".join([c for c in cmd_val if c.isalnum() or c in ("_", "-")]).strip()
+                    local_png = os.path.join(os.path.dirname(__file__), "extracted_icons", icon_name + ".png")
+                    if os.path.exists(local_png):
+                        img_path = resolve_themed_icon(local_png)
+                        is_image = True
             
             if is_image and img_path:
                 if not os.path.isabs(img_path):
                     img_path = os.path.join(os.path.dirname(__file__), img_path)
                 if os.path.exists(img_path):
-                    try:
-                        image_element.Source = load_bitmap_image_themed(img_path)
+                    loaded_img = load_bitmap_image_themed(img_path)
+                    if loaded_img:
+                        image_element.Source = loaded_img
                         image_element.Visibility = Visibility.Visible
                         emoji_element.Visibility = Visibility.Collapsed
-                    except Exception as ex:
-                        log_debug(u"Failed to load image icon: {}".format(safe_str(ex)))
+                    else:
                         image_element.Visibility = Visibility.Collapsed
-                        emoji_element.Text = u"❓"
-                        emoji_element.Visibility = Visibility.Visible
+                        is_image = False
                 else:
                     image_element.Visibility = Visibility.Collapsed
                     is_image = False
-            else:
+                    
+            if not is_image:
                 image_element.Visibility = Visibility.Collapsed
                 
                 # Intelligent emoji fallback for built-in commands with missing/default icons
@@ -2977,6 +3753,10 @@ class RadialMenuWindow(Window):
                 if hasattr(self, "EnableGesturesCheckBox") and self.EnableGesturesCheckBox:
                     self.EnableGesturesCheckBox.Checked += self.on_appearance_setting_changed
                     self.EnableGesturesCheckBox.Unchecked += self.on_appearance_setting_changed
+                # Wire up keep open / pin menu checkbox
+                if hasattr(self, "KeepOpenCheckBox") and self.KeepOpenCheckBox:
+                    self.KeepOpenCheckBox.Checked += self.on_appearance_setting_changed
+                    self.KeepOpenCheckBox.Unchecked += self.on_appearance_setting_changed
                 # Wire up animation style combo
                 self.AnimationStyleComboBox.SelectionChanged += self.on_animation_style_changed
                 # Wire up appearance sliders
@@ -3133,9 +3913,116 @@ class RadialMenuWindow(Window):
         p_out2_y = cy + offset * n2_y + t_out * d2_y
         
         # WPF path format
-        path = "M {0:.2f},{1:.2f} L {2:.2f},{3:.2f} A {4},{4} 0 0,1 {5:.2f},{6:.2f} L {7:.2f},{8:.2f} A {9},{9} 0 0,0 {10:.2f},{11:.2f} Z".format(
-            p_in1_x, p_in1_y, p_out1_x, p_out1_y, r_out, p_out2_x, p_out2_y, p_in2_x, p_in2_y, r_in, p_in1_x, p_in1_y
+        if r_in > offset:
+            path = "M {0:.2f},{1:.2f} L {2:.2f},{3:.2f} A {4},{4} 0 0,1 {5:.2f},{6:.2f} L {7:.2f},{8:.2f} A {9},{9} 0 0,0 {10:.2f},{11:.2f} Z".format(
+                p_in1_x, p_in1_y, p_out1_x, p_out1_y, r_out, p_out2_x, p_out2_y, p_in2_x, p_in2_y, r_in, p_in1_x, p_in1_y
+            )
+        else:
+            path = "M {0:.2f},{1:.2f} L {2:.2f},{3:.2f} A {4},{4} 0 0,1 {5:.2f},{6:.2f} L {7:.2f},{8:.2f} Z".format(
+                p_in1_x, p_in1_y, p_out1_x, p_out1_y, r_out, p_out2_x, p_out2_y, p_in2_x, p_in2_y
+            )
+        return path
+
+    def get_custom_sector_path_parallel(self, cx, cy, r_in, r_out, angle_center, span, gap_width):
+        import math
+        theta1 = angle_center - span / 2.0
+        theta2 = angle_center + span / 2.0
+        
+        rad1 = theta1 * math.pi / 180.0
+        rad2 = theta2 * math.pi / 180.0
+        
+        d1_x = math.cos(rad1)
+        d1_y = math.sin(rad1)
+        d2_x = math.cos(rad2)
+        d2_y = math.sin(rad2)
+        
+        offset = float(gap_width) / 2.0
+        
+        n1_x = -d1_y
+        n1_y = d1_x
+        
+        n2_x = d2_y
+        n2_y = -d2_x
+        
+        if r_in > offset:
+            t_in = math.sqrt(r_in * r_in - offset * offset)
+        else:
+            t_in = 0.0
+            
+        if r_out > offset:
+            t_out = math.sqrt(r_out * r_out - offset * offset)
+        else:
+            t_out = 0.0
+            
+        p_in1_x = cx + offset * n1_x + t_in * d1_x
+        p_in1_y = cy + offset * n1_y + t_in * d1_y
+        
+        p_out1_x = cx + offset * n1_x + t_out * d1_x
+        p_out1_y = cy + offset * n1_y + t_out * d1_y
+        
+        p_in2_x = cx + offset * n2_x + t_in * d2_x
+        p_in2_y = cy + offset * n2_y + t_in * d2_y
+        
+        p_out2_x = cx + offset * n2_x + t_out * d2_x
+        p_out2_y = cy + offset * n2_y + t_out * d2_y
+        
+        large_arc = 1 if span > 180.0 else 0
+        if r_in > offset:
+            path = "M {0:.2f},{1:.2f} L {2:.2f},{3:.2f} A {4},{4} 0 {12},1 {5:.2f},{6:.2f} L {7:.2f},{8:.2f} A {9},{9} 0 {12},0 {10:.2f},{11:.2f} Z".format(
+                p_in1_x, p_in1_y, p_out1_x, p_out1_y, r_out, p_out2_x, p_out2_y, p_in2_x, p_in2_y, r_in, p_in1_x, p_in1_y, large_arc
+            )
+        else:
+            path = "M {0:.2f},{1:.2f} L {2:.2f},{3:.2f} A {4},{4} 0 {5},1 {6:.2f},{7:.2f} L {8:.2f},{9:.2f} Z".format(
+                p_in1_x, p_in1_y, p_out1_x, p_out1_y, r_out, large_arc, p_out2_x, p_out2_y, p_in2_x, p_in2_y
+            )
+        return path
+
+    def get_core_path_pinned_top(self, cx, cy, r_out, gap_width=1.5):
+        import math
+        offset = float(gap_width) / 2.0
+        t_out = math.sqrt(max(0.0, r_out * r_out - offset * offset))
+        # Start at left ray, arc clockwise across top to right ray, close along flat bottom
+        path = "M {0:.2f},{1:.2f} A {2},{2} 0 0,1 {3:.2f},{1:.2f} Z".format(
+            cx - t_out, cy - offset, r_out, cx + t_out
         )
+        return path
+
+    def get_core_path_quadrant(self, cx, cy, r_out, quadrant_idx, gap_width=1.5):
+        import math
+        offset = float(gap_width) / 2.0
+        t_out = math.sqrt(max(0.0, r_out * r_out - offset * offset))
+        if quadrant_idx == 0:  # Top-Left (225°): left ray -> arc clockwise to top ray
+            path = "M {0:.2f},{1:.2f} L {2:.2f},{1:.2f} A {3},{3} 0 0,1 {0:.2f},{4:.2f} Z".format(
+                cx - offset, cy - offset, cx - t_out, r_out, cy - t_out
+            )
+        elif quadrant_idx == 1:  # Top-Right (315°): top ray -> arc clockwise to right ray
+            path = "M {0:.2f},{1:.2f} L {0:.2f},{2:.2f} A {3},{3} 0 0,1 {4:.2f},{1:.2f} Z".format(
+                cx + offset, cy - offset, cy - t_out, r_out, cx + t_out
+            )
+        elif quadrant_idx == 2:  # Bottom-Right (45°): right ray -> arc clockwise to bottom ray
+            path = "M {0:.2f},{1:.2f} L {2:.2f},{1:.2f} A {3},{3} 0 0,1 {0:.2f},{4:.2f} Z".format(
+                cx + offset, cy + offset, cx + t_out, r_out, cy + t_out
+            )
+        else:  # Bottom-Left (135°): bottom ray -> arc clockwise to left ray
+            path = "M {0:.2f},{1:.2f} L {0:.2f},{2:.2f} A {3},{3} 0 0,1 {4:.2f},{1:.2f} Z".format(
+                cx - offset, cy + offset, cy + t_out, r_out, cx - t_out
+            )
+        return path
+
+    def get_core_path_semicircle(self, cx, cy, r_out, is_left=True, gap_width=1.5):
+        import math
+        offset = float(gap_width) / 2.0
+        t_out = math.sqrt(max(0.0, r_out * r_out - offset * offset))
+        if is_left:
+            # Bottom ray -> arc clockwise across left to top ray
+            path = "M {0:.2f},{1:.2f} A {2},{2} 0 0,1 {0:.2f},{3:.2f} Z".format(
+                cx - offset, cy + t_out, r_out, cy - t_out
+            )
+        else:
+            # Top ray -> arc clockwise across right to bottom ray
+            path = "M {0:.2f},{1:.2f} A {2},{2} 0 0,1 {0:.2f},{3:.2f} Z".format(
+                cx + offset, cy - t_out, r_out, cy + t_out
+            )
         return path
 
     def get_text_pos(self, cx, cy, r_in, r_out, angle_center, w=80, h=70, btn_name=None):
@@ -3147,7 +4034,10 @@ class RadialMenuWindow(Window):
         y_c = cy + r_mid * math.sin(rad)
         
         left = x_c - w / 2.0
-        top = y_c - 12.0  # Default aligns icon Y-center to y_c
+        if btn_name and btn_name.startswith("BtnL"):
+            top = y_c - 12.0  # Petals align icon Y-center to y_c
+        else:
+            top = y_c - h / 2.0  # Core buttons are centered exactly at (x_c, y_c)
         
         norm_angle = angle_center % 360.0
         is_top_half = (185.0 <= norm_angle <= 355.0)
@@ -3451,26 +4341,54 @@ class RadialMenuWindow(Window):
             Canvas.SetTop(self.CenterCoreBg, cy - core_radius)
             
             # Update Center core buttons positioning and geometries
-            # Normal Mode: 2 sectors (num_sectors=2, angle_center=180.0 and 0.0)
-            path_settings = self.get_sector_path_parallel(cx, cy, 0.0, core_radius, 180.0, 2, 1.5)
-            path_close = self.get_sector_path_parallel(cx, cy, 0.0, core_radius, 0.0, 2, 1.5)
-            self.BtnCoreSettings.Tag = path_settings
-            self.BtnCoreClose.Tag = path_close
+            settings = getattr(self, "_config_data", {}).get("settings", {})
+            keep_open = settings.get("keep_open_after_execution", False) and not settings.get("enable_gestures", True)
             
-            # Position panels for normal mode core (left, right)
-            left_s, top_s = self.get_text_pos(cx, cy, 0.0, core_radius, 180.0, 50, 40)
-            Canvas.SetLeft(self.BtnCoreSettingsPanel, left_s)
-            Canvas.SetTop(self.BtnCoreSettingsPanel, top_s)
+            if keep_open:
+                # Pinned Mode: 3 buttons in core
+                # 1. Top half (180° span centered at 270°) -> Drag to Move Menu
+                # 2. Bottom-left (90° span centered at 135°) -> Setup / Settings
+                # 3. Bottom-right (90° span centered at 45°) -> Close
+                path_pin_move = self.get_core_path_pinned_top(cx, cy, core_radius, 1.5)
+                path_settings = self.get_core_path_quadrant(cx, cy, core_radius, 3, 1.5)
+                path_close = self.get_core_path_quadrant(cx, cy, core_radius, 2, 1.5)
+                
+                if hasattr(self, "BtnCorePinMove") and self.BtnCorePinMove:
+                    self.BtnCorePinMove.Tag = path_pin_move
+                    l_pm, t_pm = self.get_text_pos(cx, cy, 0.0, core_radius, 270.0, 40, 40)
+                    Canvas.SetLeft(self.BtnCorePinMovePanel, l_pm)
+                    Canvas.SetTop(self.BtnCorePinMovePanel, t_pm)
+                    
+                self.BtnCoreSettings.Tag = path_settings
+                self.BtnCoreClose.Tag = path_close
+                
+                l_s, t_s = self.get_text_pos(cx, cy, 0.0, core_radius, 135.0, 40, 40)
+                Canvas.SetLeft(self.BtnCoreSettingsPanel, l_s)
+                Canvas.SetTop(self.BtnCoreSettingsPanel, t_s)
+                
+                l_c, t_c = self.get_text_pos(cx, cy, 0.0, core_radius, 45.0, 40, 40)
+                Canvas.SetLeft(self.BtnCoreClosePanel, l_c)
+                Canvas.SetTop(self.BtnCoreClosePanel, t_c)
+            else:
+                # Normal Mode: 2 sectors (Settings=Left/180.0, Close=Right/0.0)
+                path_settings = self.get_core_path_semicircle(cx, cy, core_radius, is_left=True, gap_width=1.5)
+                path_close = self.get_core_path_semicircle(cx, cy, core_radius, is_left=False, gap_width=1.5)
+                self.BtnCoreSettings.Tag = path_settings
+                self.BtnCoreClose.Tag = path_close
+                
+                left_s, top_s = self.get_text_pos(cx, cy, 0.0, core_radius, 180.0, 40, 40)
+                Canvas.SetLeft(self.BtnCoreSettingsPanel, left_s)
+                Canvas.SetTop(self.BtnCoreSettingsPanel, top_s)
+                
+                left_c, top_c = self.get_text_pos(cx, cy, 0.0, core_radius, 0.0, 40, 40)
+                Canvas.SetLeft(self.BtnCoreClosePanel, left_c)
+                Canvas.SetTop(self.BtnCoreClosePanel, top_c)
             
-            left_c, top_c = self.get_text_pos(cx, cy, 0.0, core_radius, 0.0, 50, 40)
-            Canvas.SetLeft(self.BtnCoreClosePanel, left_c)
-            Canvas.SetTop(self.BtnCoreClosePanel, top_c)
-            
-            # Settings Mode: 4 sectors (Move=225, Pool=315, Appearance=45, Exit=135)
-            path_move = self.get_sector_path_parallel(cx, cy, 0.0, core_radius, 225.0, 4, 1.5)
-            path_pool = self.get_sector_path_parallel(cx, cy, 0.0, core_radius, 315.0, 4, 1.5)
-            path_appearance = self.get_sector_path_parallel(cx, cy, 0.0, core_radius, 45.0, 4, 1.5)
-            path_exit = self.get_sector_path_parallel(cx, cy, 0.0, core_radius, 135.0, 4, 1.5)
+            # Settings Mode: 4 sectors (Move=225/Top-Left, Pool=315/Top-Right, Appearance=45/Bottom-Right, Exit=135/Bottom-Left)
+            path_move = self.get_core_path_quadrant(cx, cy, core_radius, 0, 1.5)
+            path_pool = self.get_core_path_quadrant(cx, cy, core_radius, 1, 1.5)
+            path_appearance = self.get_core_path_quadrant(cx, cy, core_radius, 2, 1.5)
+            path_exit = self.get_core_path_quadrant(cx, cy, core_radius, 3, 1.5)
             
             self.BtnCoreMove.Tag = path_move
             self.BtnCorePool.Tag = path_pool
@@ -3478,19 +4396,19 @@ class RadialMenuWindow(Window):
             self.BtnCoreExit.Tag = path_exit
             
             # Position panels for settings mode core
-            l_move, t_move = self.get_text_pos(cx, cy, 0.0, core_radius, 225.0, 50, 40)
+            l_move, t_move = self.get_text_pos(cx, cy, 0.0, core_radius, 225.0, 40, 40)
             Canvas.SetLeft(self.BtnCoreMovePanel, l_move)
             Canvas.SetTop(self.BtnCoreMovePanel, t_move)
             
-            l_pool, t_pool = self.get_text_pos(cx, cy, 0.0, core_radius, 315.0, 50, 40)
+            l_pool, t_pool = self.get_text_pos(cx, cy, 0.0, core_radius, 315.0, 40, 40)
             Canvas.SetLeft(self.BtnCorePoolPanel, l_pool)
             Canvas.SetTop(self.BtnCorePoolPanel, t_pool)
             
-            l_app, t_app = self.get_text_pos(cx, cy, 0.0, core_radius, 45.0, 50, 40)
+            l_app, t_app = self.get_text_pos(cx, cy, 0.0, core_radius, 45.0, 40, 40)
             Canvas.SetLeft(self.BtnCoreAppearancePanel, l_app)
             Canvas.SetTop(self.BtnCoreAppearancePanel, t_app)
             
-            l_exit, t_exit = self.get_text_pos(cx, cy, 0.0, core_radius, 135.0, 50, 40)
+            l_exit, t_exit = self.get_text_pos(cx, cy, 0.0, core_radius, 135.0, 40, 40)
             Canvas.SetLeft(self.BtnCoreExitPanel, l_exit)
             Canvas.SetTop(self.BtnCoreExitPanel, t_exit)
             
@@ -3616,6 +4534,9 @@ class RadialMenuWindow(Window):
                 else:
                     btn.Visibility = Visibility.Collapsed
                         
+            # Update core buttons visibility for normal/pinned/settings mode
+            self.update_core_buttons_visibility()
+
             # Apply color themes
             self.apply_theme_colors()
             
@@ -3787,6 +4708,12 @@ class RadialMenuWindow(Window):
                 settings["enable_gestures"] = bool(self.EnableGesturesCheckBox.IsChecked)
                 global _enable_gestures
                 _enable_gestures = settings["enable_gestures"]
+                if hasattr(self, "KeepOpenCheckBox") and self.KeepOpenCheckBox:
+                    self.KeepOpenCheckBox.IsEnabled = not _enable_gestures
+                    self.KeepOpenCheckBox.Opacity = 0.5 if _enable_gestures else 1.0
+            
+            if hasattr(self, "KeepOpenCheckBox") and self.KeepOpenCheckBox:
+                settings["keep_open_after_execution"] = bool(self.KeepOpenCheckBox.IsChecked)
             
             settings["hold_delay_ms"] = int(self.DelaySlider.Value)
             self.DelayValueText.Text = u"{} ms".format(settings["hold_delay_ms"])
@@ -3962,7 +4889,14 @@ class RadialMenuWindow(Window):
             self.UseCirclesCheckBox.IsChecked = bool(settings.get("use_circles", False))
             self.EnableLoggingCheckBox.IsChecked = bool(settings.get("enable_logging", False))
             if hasattr(self, "EnableGesturesCheckBox") and self.EnableGesturesCheckBox:
-                self.EnableGesturesCheckBox.IsChecked = bool(settings.get("enable_gestures", True))
+                is_gestures = bool(settings.get("enable_gestures", True))
+                self.EnableGesturesCheckBox.IsChecked = is_gestures
+                if hasattr(self, "KeepOpenCheckBox") and self.KeepOpenCheckBox:
+                    self.KeepOpenCheckBox.IsEnabled = not is_gestures
+                    self.KeepOpenCheckBox.Opacity = 0.5 if is_gestures else 1.0
+            
+            if hasattr(self, "KeepOpenCheckBox") and self.KeepOpenCheckBox:
+                self.KeepOpenCheckBox.IsChecked = bool(settings.get("keep_open_after_execution", False))
             
             anim_style = settings.get("animation_style", "fade")
             anim_mapping = {"fade": 0, "pop": 1, "fan": 2}
@@ -4012,10 +4946,95 @@ class RadialMenuWindow(Window):
             self.HexHoverStartText.Text = settings.get("color_hover_start", "#FF0083B0")
             self.HexHoverEndText.Text = settings.get("color_hover_end", "#FF004B66")
             
+            if hasattr(self, "TxtConfigDir") and self.TxtConfigDir:
+                self.TxtConfigDir.Text = settings.get("custom_config_dir", "")
+            if hasattr(self, "TxtIconsDir") and self.TxtIconsDir:
+                self.TxtIconsDir.Text = settings.get("custom_icons_dir", "")
+            
             self._updating_ui_elements = False
         except Exception as ex:
             log_debug(u"Error in update_settings_ui_from_config: {}".format(safe_str(ex)))
             self._updating_ui_elements = False
+
+    def on_browse_config_dir_clicked(self, sender, args):
+        try:
+            clr.AddReference("System.Windows.Forms")
+            from System.Windows.Forms import FolderBrowserDialog, DialogResult
+            dialog = FolderBrowserDialog()
+            dialog.Description = "Select Folder for Radial Menu Configuration"
+            current = self.TxtConfigDir.Text.strip() if hasattr(self, "TxtConfigDir") and self.TxtConfigDir else ""
+            if current and os.path.exists(current):
+                dialog.SelectedPath = current
+            if dialog.ShowDialog() == DialogResult.OK:
+                selected = dialog.SelectedPath
+                if hasattr(self, "TxtConfigDir") and self.TxtConfigDir:
+                    self.TxtConfigDir.Text = selected
+                self._config_data["settings"]["custom_config_dir"] = selected
+                save_config(self._config_data)
+                log_debug(u"Custom config folder updated to: {}".format(selected))
+        except Exception as ex:
+            log_debug("Error in on_browse_config_dir_clicked: " + str(ex))
+
+    def on_reset_config_dir_clicked(self, sender, args):
+        try:
+            if hasattr(self, "TxtConfigDir") and self.TxtConfigDir:
+                self.TxtConfigDir.Text = ""
+            self._config_data["settings"]["custom_config_dir"] = ""
+            save_config(self._config_data)
+            log_debug(u"Custom config folder reset to default.")
+        except Exception as ex:
+            log_debug("Error in on_reset_config_dir_clicked: " + str(ex))
+
+    def on_browse_icons_dir_clicked(self, sender, args):
+        try:
+            clr.AddReference("System.Windows.Forms")
+            from System.Windows.Forms import FolderBrowserDialog, DialogResult
+            dialog = FolderBrowserDialog()
+            dialog.Description = "Select Folder for Extracted Ribbon Icons"
+            current = self.TxtIconsDir.Text.strip() if hasattr(self, "TxtIconsDir") and self.TxtIconsDir else ""
+            if current and os.path.exists(current):
+                dialog.SelectedPath = current
+            if dialog.ShowDialog() == DialogResult.OK:
+                selected = dialog.SelectedPath
+                if hasattr(self, "TxtIconsDir") and self.TxtIconsDir:
+                    self.TxtIconsDir.Text = selected
+                self._config_data["settings"]["custom_icons_dir"] = selected
+                set_effective_icons_dir(selected)
+                save_config(self._config_data)
+                self.load_pool_list()
+                log_debug(u"Custom icons folder updated to: {}".format(selected))
+        except Exception as ex:
+            log_debug("Error in on_browse_icons_dir_clicked: " + str(ex))
+
+    def on_reset_icons_dir_clicked(self, sender, args):
+        try:
+            if hasattr(self, "TxtIconsDir") and self.TxtIconsDir:
+                self.TxtIconsDir.Text = ""
+            self._config_data["settings"]["custom_icons_dir"] = ""
+            set_effective_icons_dir(None)
+            save_config(self._config_data)
+            self.load_pool_list()
+            log_debug(u"Custom icons folder reset to default.")
+        except Exception as ex:
+            log_debug("Error in on_reset_icons_dir_clicked: " + str(ex))
+
+    def on_custom_paths_text_changed(self, sender, args):
+        try:
+            cfg_dir = self.TxtConfigDir.Text.strip() if hasattr(self, "TxtConfigDir") and self.TxtConfigDir else ""
+            icn_dir = self.TxtIconsDir.Text.strip() if hasattr(self, "TxtIconsDir") and self.TxtIconsDir else ""
+            changed = False
+            if self._config_data.get("settings", {}).get("custom_config_dir") != cfg_dir:
+                self._config_data["settings"]["custom_config_dir"] = cfg_dir
+                changed = True
+            if self._config_data.get("settings", {}).get("custom_icons_dir") != icn_dir:
+                self._config_data["settings"]["custom_icons_dir"] = icn_dir
+                set_effective_icons_dir(icn_dir)
+                changed = True
+            if changed:
+                save_config(self._config_data)
+                log_debug(u"Saved updated storage paths from text fields.")
+        except Exception as ex:
+            log_debug("Error in on_custom_paths_text_changed: " + str(ex))
 
     def normalize_slots(self):
         """Normalize pool priorities within each level and parent."""
@@ -4105,6 +5124,8 @@ class RadialMenuWindow(Window):
             # Expand customizer panel, switch to Tab 0 (Command Pool)
             self.CustomizerBorder.Visibility = Visibility.Visible
             self.CustomizerTabControl.SelectedIndex = 0
+            if hasattr(self, "TxtPanelTitle") and self.TxtPanelTitle:
+                self.TxtPanelTitle.Text = "Commands & Structure"
             
             # Show separate customizer window
             if hasattr(self, "customizer_window") and self.customizer_window:
@@ -4116,6 +5137,9 @@ class RadialMenuWindow(Window):
             
             # Refresh pool list to reflect any changes made in Move mode
             self.load_pool_list()
+            
+            # Check if icons for active theme need extraction
+            self.check_and_prompt_ribbon_icon_extraction()
             
             log_debug(u"Pool mode activated. Customizer window shown and switched to Command Pool tab.")
         except Exception as ex:
@@ -4137,6 +5161,8 @@ class RadialMenuWindow(Window):
             # Expand customizer panel, switch to Tab 1 (Appearance)
             self.CustomizerBorder.Visibility = Visibility.Visible
             self.CustomizerTabControl.SelectedIndex = 1
+            if hasattr(self, "TxtPanelTitle") and self.TxtPanelTitle:
+                self.TxtPanelTitle.Text = "Settings & Appearance"
             
             # Show separate customizer window
             if hasattr(self, "customizer_window") and self.customizer_window:
@@ -4146,9 +5172,56 @@ class RadialMenuWindow(Window):
                 except Exception as show_ex:
                     log_debug("Failed to show customizer window: " + str(show_ex))
             
+            # Check if icons for active theme need extraction
+            self.check_and_prompt_ribbon_icon_extraction()
+            
             log_debug(u"Appearance mode activated. Customizer window shown and switched to Appearance tab.")
         except Exception as ex:
             log_debug(u"Error in on_core_appearance_clicked: {}".format(safe_str(ex)))
+
+    def check_and_prompt_ribbon_icon_extraction(self):
+        try:
+            curr_ver = get_revit_version()
+            prompt_key = "{}_{}".format(curr_ver, _IS_REVIT_DARK)
+            if getattr(self, "_icon_prompt_dismissed_key", None) == prompt_key:
+                return
+            if is_icon_extraction_needed():
+                self._icon_prompt_dismissed_key = prompt_key
+                avail_vers = get_available_icon_versions()
+                
+                def on_extract():
+                    self.on_extract_all_icons_clicked(None, None)
+                    
+                def on_use_ver(ver_to_use):
+                    copied = copy_icons_from_version(ver_to_use, curr_ver)
+                    self.load_layout_configuration(force_reload=True)
+                    self.update_radial_geometry()
+                    self.load_pool_list()
+                    try:
+                        summary = ExtractionSummaryModal(
+                            saved=copied,
+                            skipped=0,
+                            failed=0,
+                            duration_sec=0.1,
+                            is_dark_theme=_IS_REVIT_DARK,
+                            owner_handle=getattr(self, "_revit_window_handle", None)
+                        )
+                        summary.Title = "Icons Loaded from Revit " + ver_to_use
+                        summary.Show()
+                    except Exception as sum_ex:
+                        log_debug("Failed to show summary modal: " + str(sum_ex))
+
+                prompt_win = ExtractionPromptModal(
+                    is_dark_theme=_IS_REVIT_DARK,
+                    curr_version=curr_ver,
+                    available_versions=avail_vers,
+                    on_extract_callback=on_extract,
+                    on_use_version_callback=on_use_ver,
+                    owner_handle=getattr(self, "_revit_window_handle", None)
+                )
+                prompt_win.Show()
+        except Exception as ex:
+            log_debug("Error in check_and_prompt_ribbon_icon_extraction: " + str(ex))
 
     def on_core_exit_clicked(self):
         """Exit settings mode - same as on_exit_customizer_clicked but called from core button."""
@@ -4156,65 +5229,85 @@ class RadialMenuWindow(Window):
 
     def on_extract_all_icons_clicked(self, sender, args):
         try:
-            from System.Windows import MessageBox, MessageBoxButton, MessageBoxImage, Visibility
-            
-            msg = u"Extract all Revit Ribbon icons for the active theme in the background?\nThis process runs smoothly with live progress."
-            if _IS_REVIT_DARK:
-                msg += u"\n\nActive theme: Dark (saving as *.dark.png)"
-            else:
-                msg += u"\n\nActive theme: Light (saving as *.png)"
-                
-            res = MessageBox.Show(msg, "Extract Ribbon Icons", MessageBoxButton.OKCancel, MessageBoxImage.Information)
-            if res.ToString() == "OK":
-                btn = getattr(self, "BtnExtractAllIcons", None)
-                if btn:
-                    btn.IsEnabled = False
-                    btn.Content = "Extracting..."
-                    
-                pnl = getattr(self, "ExtractProgressPanel", None)
-                pbar = getattr(self, "ExtractProgressBar", None)
-                txt_status = getattr(self, "ExtractStatusText", None)
-                txt_pct = getattr(self, "ExtractPercentText", None)
-                
-                if pnl:
-                    pnl.Visibility = Visibility.Visible
-                if pbar:
-                    pbar.Value = 0
-                if txt_pct:
-                    txt_pct.Text = "0%"
-                if txt_status:
-                    txt_status.Text = "Extracting ribbon icons..."
-                    
-                def on_progress(curr, total):
-                    def update_progress():
-                        pct = int(float(curr) / float(max(1, total)) * 100)
-                        if pbar:
-                            pbar.Value = pct
-                        if txt_pct:
-                            txt_pct.Text = u"{}% ({}/{})".format(pct, curr, total)
-                        if txt_status:
-                            txt_status.Text = u"Extracting {} of {}...".format(curr, total)
-                    try:
-                        from System import Action
-                        self.Dispatcher.BeginInvoke(Action(update_progress))
-                    except:
-                        pass
+            import time
 
-                def on_done(saved, skipped, failed):
-                    def update_ui():
-                        if btn:
-                            btn.IsEnabled = True
-                            btn.Content = "Extract Ribbon Icons"
-                        if pnl:
-                            pnl.Visibility = Visibility.Collapsed
-                        MessageBox.Show(u"Ribbon icons extraction completed!\n\nExtracted: {}\nSkipped (already cached): {}\nFailed: {}".format(saved, skipped, failed), "Success", MessageBoxButton.OK, MessageBoxImage.Information)
+            # 1. Hide Customizer window and Radial Menu to prevent interaction and clear screen
+            if hasattr(self, "customizer_window") and self.customizer_window:
+                try:
+                    self.customizer_window.Hide()
+                except:
+                    pass
+            self.Hide()
+            
+            # 2. Show dedicated modal progress window
+            progress_win = ExtractionProgressModal(getattr(self, "_revit_window_handle", None))
+            progress_win.Show()
+            
+            start_time = time.time()
+            
+            def on_progress(curr, total, item_name):
+                def update_ui():
+                    pct = int(float(curr) / float(max(1, total)) * 100)
+                    progress_win.pbar.Value = pct
+                    progress_win.txt_count.Text = u"{} / {} ({}%)".format(curr, total, pct)
+                    if item_name:
+                        progress_win.txt_item.Text = u"Extracting: {}".format(item_name)
+                    
+                    elapsed = max(0.01, time.time() - start_time)
+                    speed = float(curr) / elapsed
+                    rem_sec = max(0, int((total - curr) / max(0.1, speed)))
+                    mins = rem_sec // 60
+                    secs = rem_sec % 60
+                    progress_win.txt_eta.Text = u"ETA: ~{:02d}:{:02d} • {:.0f} items/s".format(mins, secs, speed)
+                try:
+                    from System import Action
+                    self.Dispatcher.BeginInvoke(Action(update_ui))
+                except:
+                    pass
+
+            def on_done(saved, skipped, failed):
+                total_duration = time.time() - start_time
+                def finish_ui():
                     try:
-                        from System import Action
-                        self.Dispatcher.BeginInvoke(Action(update_ui))
+                        progress_win.Close()
                     except:
                         pass
                         
-                extract_icons_from_ribbon(force_overwrite=True, progress_callback=on_progress, completion_callback=on_done)
+                    # Reload radial layout with freshly extracted icons
+                    self.load_layout_configuration(force_reload=True)
+                    self.update_radial_geometry()
+                    self.load_pool_list()
+                    
+                    # Restore Customizer Window
+                    if hasattr(self, "customizer_window") and self.customizer_window:
+                        try:
+                            self.customizer_window.Show()
+                            self.customizer_window.Activate()
+                        except:
+                            pass
+                    self.Show()
+                    
+                    # Show sleek themed completion modal
+                    try:
+                        summary_modal = ExtractionSummaryModal(
+                            saved=saved,
+                            skipped=skipped,
+                            failed=failed,
+                            duration_sec=total_duration,
+                            is_dark_theme=_IS_REVIT_DARK,
+                            owner_handle=getattr(self, "_revit_window_handle", None)
+                        )
+                        summary_modal.Show()
+                    except Exception as sum_ex:
+                        log_debug("Failed to show summary modal: " + str(sum_ex))
+                        
+                try:
+                    from System import Action
+                    self.Dispatcher.BeginInvoke(Action(finish_ui))
+                except:
+                    pass
+
+            extract_icons_from_ribbon(force_overwrite=True, progress_callback=on_progress, completion_callback=on_done)
         except Exception as ex:
             log_debug("Error in on_extract_all_icons_clicked: " + str(ex))
 
@@ -4986,37 +6079,50 @@ class RadialMenuWindow(Window):
         if hasattr(self, "_cached_icon_items"):
             return self._cached_icon_items
             
-        icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
-        icon_items = []
+        icons_dir = get_effective_icons_dir()
+        ver = get_revit_version()
+        scan_dirs = []
+        ver_dir = os.path.join(icons_dir, ver)
+        if os.path.exists(ver_dir):
+            scan_dirs.append(ver_dir)
         if os.path.exists(icons_dir):
-            try:
-                for filename in os.listdir(icons_dir):
-                    if filename.lower().endswith(".png") and not filename.lower().endswith(".dark.png"):
-                        cmd_id = filename[:-4] # Remove .png
-                        
-                        name_part = cmd_id
-                        if name_part.startswith("ID_"):
-                            name_part = name_part[3:]
+            scan_dirs.append(icons_dir)
+            
+        icon_items = []
+        seen_cmds = set()
+        for s_dir in scan_dirs:
+            if os.path.exists(s_dir):
+                try:
+                    for filename in os.listdir(s_dir):
+                        if filename.lower().endswith(".png") and not filename.lower().endswith(".dark.png"):
+                            cmd_id = filename[:-4] # Remove .png
+                            if cmd_id.lower() in seen_cmds:
+                                continue
+                            seen_cmds.add(cmd_id.lower())
                             
-                        prefixes_to_clean = ["OBJECTS_", "RBS_", "ANNOTATIONS_", "ANNOTATE_", "VIEW_", "EDIT_", "FILE_", "SETTINGS_", "BUTTON_", "MODIFY_", "WINDOW_"]
-                        for prefix in prefixes_to_clean:
-                            if name_part.startswith(prefix):
-                                name_part = name_part[len(prefix):]
-                                break
+                            name_part = cmd_id
+                            if name_part.startswith("ID_"):
+                                name_part = name_part[3:]
                                 
-                        words = name_part.split("_")
-                        clean_words = []
-                        for w in words:
-                            if w and w not in clean_words:
-                                clean_words.append(w)
-                        clean_name = " ".join(clean_words).title()
-                        
-                        full_path = os.path.join(icons_dir, filename)
-                        path_val = "extracted_icons/" + filename
-                        
-                        icon_items.append(IconItem(cmd_id, clean_name, full_path, path_val))
-            except Exception as ex:
-                log_debug("Error loading icons from folder: " + str(ex))
+                            prefixes_to_clean = ["OBJECTS_", "RBS_", "ANNOTATIONS_", "ANNOTATE_", "VIEW_", "EDIT_", "FILE_", "SETTINGS_", "BUTTON_", "MODIFY_", "WINDOW_"]
+                            for prefix in prefixes_to_clean:
+                                if name_part.startswith(prefix):
+                                    name_part = name_part[len(prefix):]
+                                    break
+                                    
+                            words = name_part.split("_")
+                            clean_words = []
+                            for w in words:
+                                if w and w not in clean_words:
+                                    clean_words.append(w)
+                            clean_name = " ".join(clean_words).title()
+                            
+                            full_path = os.path.join(s_dir, filename)
+                            path_val = "extracted_icons/" + filename
+                            
+                            icon_items.append(IconItem(cmd_id, clean_name, full_path, path_val))
+                except Exception as ex:
+                    log_debug("Error loading icons from folder: " + str(ex))
                 
         # Sort icons by CleanName
         icon_items = sorted(icon_items, key=lambda x: x.CleanName)
@@ -5627,6 +6733,8 @@ class RadialMenuWindow(Window):
     def update_core_buttons_visibility(self):
         from System.Windows import Visibility
         if self.customizer_mode:
+            if hasattr(self, "BtnCorePinMove") and self.BtnCorePinMove:
+                self.BtnCorePinMove.Visibility = Visibility.Collapsed
             self.BtnCoreClose.Visibility = Visibility.Collapsed
             self.BtnCoreSettings.Visibility = Visibility.Collapsed
             self.BtnCoreMove.Visibility = Visibility.Visible
@@ -5634,12 +6742,24 @@ class RadialMenuWindow(Window):
             self.BtnCoreAppearance.Visibility = Visibility.Visible
             self.BtnCoreExit.Visibility = Visibility.Visible
         else:
-            self.BtnCoreClose.Visibility = Visibility.Visible
-            self.BtnCoreSettings.Visibility = Visibility.Visible
             self.BtnCoreMove.Visibility = Visibility.Collapsed
             self.BtnCorePool.Visibility = Visibility.Collapsed
             self.BtnCoreAppearance.Visibility = Visibility.Collapsed
             self.BtnCoreExit.Visibility = Visibility.Collapsed
+            
+            settings = getattr(self, "_config_data", {}).get("settings", {})
+            keep_open = settings.get("keep_open_after_execution", False) and not settings.get("enable_gestures", True)
+            
+            if keep_open:
+                if hasattr(self, "BtnCorePinMove") and self.BtnCorePinMove:
+                    self.BtnCorePinMove.Visibility = Visibility.Visible
+                self.BtnCoreClose.Visibility = Visibility.Visible
+                self.BtnCoreSettings.Visibility = Visibility.Visible
+            else:
+                if hasattr(self, "BtnCorePinMove") and self.BtnCorePinMove:
+                    self.BtnCorePinMove.Visibility = Visibility.Collapsed
+                self.BtnCoreClose.Visibility = Visibility.Visible
+                self.BtnCoreSettings.Visibility = Visibility.Visible
 
     def on_petal_mouse_down(self, sender, args):
         try:
@@ -6192,7 +7312,7 @@ class RadialMenuWindow(Window):
                 
             # 4. Load Revit Built-in Commands using the pre-loaded Ribbon structure
             try:
-                icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
+                icons_dir = get_effective_icons_dir()
                 ribbon_cmds = getattr(self, "_ribbon_commands", [])
                 log_debug(u"Processing {} Ribbon commands in worker...".format(len(ribbon_cmds)))
                 
@@ -6259,9 +7379,12 @@ class RadialMenuWindow(Window):
                         
                         # Find matching icon file in extracted_icons
                         safe_filename = "".join([c for c in cmd_id if c.isalnum() or c in ("_", "-")]).strip()
-                        icon_path = os.path.join(icons_dir, safe_filename + ".png")
+                        ver = get_revit_version()
+                        icon_path = os.path.join(icons_dir, ver, safe_filename + ".png")
                         if not os.path.exists(icon_path):
-                            icon_path = None
+                            icon_path = os.path.join(icons_dir, safe_filename + ".png")
+                            if not os.path.exists(icon_path):
+                                icon_path = None
                             
                         parsed_list.append({
                             "title": u"{} ({})".format(title, cmd_id),
@@ -6275,12 +7398,22 @@ class RadialMenuWindow(Window):
                         pass
                 
                 # 5. Load remaining offline/unused icons from extracted_icons folder as fallback
+                scan_dirs = []
+                ver = get_revit_version()
+                ver_dir = os.path.join(icons_dir, ver)
+                if os.path.exists(ver_dir):
+                    scan_dirs.append(ver_dir)
                 if os.path.exists(icons_dir):
-                    fallback_count = 0
-                    for filename in os.listdir(icons_dir):
+                    scan_dirs.append(icons_dir)
+                    
+                seen_scan_ids = set(seen_ribbon_ids)
+                fallback_count = 0
+                for s_dir in scan_dirs:
+                    for filename in os.listdir(s_dir):
                         if filename.lower().endswith(".png") and not filename.lower().endswith(".dark.png"):
                             cmd_id = filename[:-4]
-                            if cmd_id.lower() not in seen_ribbon_ids:
+                            if cmd_id.lower() not in seen_scan_ids:
+                                seen_scan_ids.add(cmd_id.lower())
                                 name_part = cmd_id
                                 if name_part.startswith("ID_"):
                                     name_part = name_part[3:]
@@ -7490,7 +8623,7 @@ class RadialMenuWindow(Window):
                             return ""
                             
                         import os
-                        icons_dir = os.path.join(os.path.dirname(__file__), "extracted_icons")
+                        icons_dir = get_effective_icons_dir()
                         if not os.path.exists(icons_dir):
                             try:
                                 os.makedirs(icons_dir)
@@ -7595,42 +8728,6 @@ class RadialMenuWindow(Window):
         except Exception as ex:
             log_debug(u"Error in on_button_clicked_dynamic: {}".format(safe_str(ex)))
 
-    def on_slot_clicked(self, slot_num):
-        if self._is_closing:
-            return
-            
-        # If we are in customization mode, clicking button shouldn't run commands!
-        if self.customizer_mode:
-            return
-            
-        # Find the pool item associated with this slot via button name
-        btn_name = SLOT_BUTTONS.get(slot_num)
-        pool_item = getattr(self, "_button_to_pool_item", {}).get(btn_name)
-        
-        if not pool_item:
-            # Fallback: try reverse lookup
-            for bname, item in getattr(self, "_button_to_pool_item", {}).items():
-                if self._button_to_slot_map.get(bname) == slot_num:
-                    pool_item = item
-                    break
-                
-        if pool_item:
-            cmd_type = pool_item.get("type")
-            cmd_value = pool_item.get("command")
-            
-            if cmd_value == "empty":
-                log_debug(u"Clicked empty slot {}. Doing nothing.".format(slot_num))
-                return
-            
-            # Submenu triggers
-            if cmd_value in ["submenu1", "submenu2"]:
-                button_level = pool_item.get("level", 1)
-                if button_level == 1:
-                    self.toggle_level2()
-                elif button_level == 2:
-                    self.toggle_level3()
-                return
-                
     def hide_radial_menu(self):
         if getattr(self, "customizer_mode", False):
             return
@@ -7638,8 +8735,114 @@ class RadialMenuWindow(Window):
             from System.Windows import Visibility
             self.Visibility = Visibility.Hidden
             self._is_closing = False
+            self._hovered_pool_item = None
+            self._hovered_button_name = None
+            self._hovered_core_button = None
         except:
             pass
+
+    def execute_hovered_or_close(self, cursor_x=None, cursor_y=None):
+        """Called on RMB release in flick/gesture mode.
+        Executes whichever button/command is currently hovered, or opens settings if center setup button was released,
+        or closes the menu if released on empty space."""
+        try:
+            if self.customizer_mode:
+                return False
+                
+            menu_center_x = self.Left + (self.Width / 2.0)
+            menu_center_y = self.Top + (self.Height / 2.0)
+            dist = None
+            mouse_angle = None
+            if cursor_x is not None and cursor_y is not None:
+                dx = float(cursor_x - menu_center_x)
+                dy = float(cursor_y - menu_center_y)
+                dist = math.sqrt(dx * dx + dy * dy)
+                mouse_angle = (math.degrees(math.atan2(dy, dx)) + 360.0) % 360.0
+                
+            settings = self._config_data.get("settings", {})
+            keep_open = settings.get("keep_open_after_execution", False) and not settings.get("enable_gestures", True)
+            core_r = float(settings.get("core_radius", 45))
+            petal_w = float(settings.get("petal_width", 60))
+            ring_sp = float(settings.get("ring_spacing", 5))
+
+            hovered_core = getattr(self, "_hovered_core_button", None)
+            
+            if keep_open:
+                # 1. Top half (180° to 360°): DragMove (BtnCorePinMove)
+                if hovered_core == "BtnCorePinMove" or (dist is not None and dist <= core_r and (180.0 <= mouse_angle <= 360.0)):
+                    log_debug(u"RMB released on Center Pin Move button. Doing nothing / staying open.")
+                    return True
+                # 2. Bottom-left (90° to 180°): Settings (BtnCoreSettings)
+                if hovered_core == "BtnCoreSettings" or (dist is not None and dist <= core_r and (90.0 <= mouse_angle <= 180.0)):
+                    log_debug(u"RMB released on Center Setup / Settings button. Opening Settings...")
+                    self.setup_customizer_mode()
+                    return True
+                # 3. Bottom-right (0° to 90°): Close (BtnCoreClose)
+                if hovered_core == "BtnCoreClose" or (dist is not None and dist <= core_r and (0.0 <= mouse_angle <= 90.0)):
+                    log_debug(u"RMB released on Center Close button. Closing menu.")
+                    self.hide_radial_menu()
+                    return True
+            else:
+                # 1. Check Central Core Settings button (Left half of core: 90° to 270°)
+                if hovered_core == "BtnCoreSettings" or (dist is not None and dist <= core_r and (90.0 <= mouse_angle <= 270.0)):
+                    log_debug(u"RMB released on Center Setup / Settings button. Opening Settings...")
+                    self.setup_customizer_mode()
+                    return True
+                    
+                # 2. Check Central Core Close button (Right half of core)
+                if hovered_core == "BtnCoreClose" or (dist is not None and dist <= core_r):
+                    log_debug(u"RMB released on Center Close button. Closing menu.")
+                    self.hide_radial_menu()
+                    return True
+                
+            # 3. Check Petal items
+            target_item = getattr(self, "_hovered_pool_item", None)
+            if not target_item and dist is not None and cursor_x is not None and cursor_y is not None:
+                r1_min = core_r
+                r1_max = core_r + petal_w
+                r2_min = r1_max + ring_sp
+                r2_max = r2_min + petal_w
+                r3_min = r2_max + ring_sp
+                r3_max = r3_min + petal_w
+                
+                if r1_min <= dist <= r1_max:
+                    target_item = resolve_gesture_command_at_point(menu_center_x, menu_center_y, cursor_x, cursor_y)
+                elif r2_min <= dist <= r2_max and hasattr(self, "SubMenuLevel2") and self.SubMenuLevel2.Visibility == System.Windows.Visibility.Visible:
+                    l2_items = self._level_items.get(2, [])
+                    if l2_items:
+                        span = 360.0 / float(len(l2_items))
+                        rel_angle = (mouse_angle - 270.0 + (span / 2.0)) % 360.0
+                        idx = int(rel_angle / span)
+                        if 0 <= idx < len(l2_items):
+                            target_item = l2_items[idx]
+                elif r3_min <= dist <= r3_max and hasattr(self, "SubMenuLevel3") and self.SubMenuLevel3.Visibility == System.Windows.Visibility.Visible:
+                    l3_items = self._level_items.get(3, [])
+                    if l3_items:
+                        span = 360.0 / float(len(l3_items))
+                        rel_angle = (mouse_angle - 270.0 + (span / 2.0)) % 360.0
+                        idx = int(rel_angle / span)
+                        if 0 <= idx < len(l3_items):
+                            target_item = l3_items[idx]
+                            
+            if target_item:
+                cmd_value = target_item.get("command")
+                cmd_type = target_item.get("type")
+                if cmd_value and cmd_value not in ["empty", "submenu1", "submenu2"]:
+                    log_debug(u"Flick RMB release executed command: {} ({})".format(target_item.get("name"), cmd_value))
+                    self.hide_radial_menu()
+                    if _event_handler and _ext_event:
+                        _event_handler.set_action(execute_command, cmd_type, cmd_value)
+                        _ext_event.Raise()
+                    return True
+                    
+            # 4. Released on empty space (outside petals or non-executable item)
+            log_debug(u"Flick RMB released on empty space. Hiding menu.")
+            self.hide_radial_menu()
+            return True
+        except Exception as ex:
+            log_debug(u"Error in execute_hovered_or_close: {}".format(safe_str(ex)))
+            self.hide_radial_menu()
+            return False
 
     def on_slot_clicked(self, slot_num):
         if self._is_closing:
@@ -7677,7 +8880,13 @@ class RadialMenuWindow(Window):
                 return
                 
             log_debug(u"RadialMenuWindow slot {} clicked. Command: {}".format(slot_num, cmd_value))
-            self.hide_radial_menu()
+            
+            settings = self._config_data.get("settings", {})
+            keep_open = settings.get("keep_open_after_execution", False) and not settings.get("enable_gestures", True)
+            if not keep_open:
+                self.hide_radial_menu()
+            else:
+                log_debug(u"Pin menu / Keep open enabled. Radial menu remains visible.")
             
             if _event_handler and _ext_event:
                 _event_handler.set_action(execute_command, cmd_type, cmd_value)
@@ -7685,6 +8894,11 @@ class RadialMenuWindow(Window):
 
     def on_deactivated(self, sender, args):
         if self.customizer_mode:
+            return
+        settings = getattr(self, "_config_data", {}).get("settings", {})
+        keep_open = settings.get("keep_open_after_execution", False) and not settings.get("enable_gestures", True)
+        if keep_open:
+            # Pinned mode: keep menu open even when focus moves to Revit canvas
             return
         if self.IsMouseOver:
             log_debug(u"Window deactivated but mouse is over window. Ignoring close.")
@@ -7695,6 +8909,11 @@ class RadialMenuWindow(Window):
     def on_key_down(self, sender, args):
         if args.Key == wpf_input.Key.Escape:
             if self.customizer_mode:
+                return
+            settings = getattr(self, "_config_data", {}).get("settings", {})
+            keep_open = settings.get("keep_open_after_execution", False) and not settings.get("enable_gestures", True)
+            if keep_open:
+                # In pinned mode, Escape key is ignored so user can cancel Revit actions without closing the menu. Menu closes only via ❌ Close button.
                 return
             log_debug(u"RadialMenuWindow Escape pressed. Hiding.")
             self.hide_radial_menu()
@@ -8148,24 +9367,36 @@ def hook_callback(nCode, wParam, lParam):
                     _menu_opened_by_hold = False
                     _menu_opened_by_double_click = False
                 
-                # Check for Fast Gesture Flick execution
-                if _enable_gestures and _gesture_flick_detected and _gesture_target_item:
-                    target_cmd_item = _gesture_target_item
-                    _gesture_flick_detected = False
-                    _gesture_target_item = None
-                    
-                    cmd_type = target_cmd_item.get("type")
-                    cmd_value = target_cmd_item.get("command")
-                    log_debug(u"Gesture flick executed command: {} ({})".format(target_cmd_item.get("name"), cmd_value))
-                    
-                    close_radial_menu_fast()
-                    
-                    if _event_handler and _ext_event and cmd_value not in ["empty", "submenu1", "submenu2"]:
-                        _event_handler.set_action(execute_command, cmd_type, cmd_value)
-                        _ext_event.Raise()
-                    return 1  # Swallow RBUTTONUP
-                    
-                if was_opened_by_hold or was_double_click:
+                pt_x, pt_y = None, None
+                if lParam:
+                    try:
+                        hook_struct = ctypes.cast(ctypes.c_void_p(lParam), ctypes.POINTER(MOUSEHOOKSTRUCT)).contents
+                        pt_x = hook_struct.pt.x
+                        pt_y = hook_struct.pt.y
+                    except:
+                        pass
+                
+                active_win = get_active_window()
+                is_win_visible = False
+                if active_win:
+                    try:
+                        from System.Windows import Visibility
+                        is_win_visible = (active_win.Visibility == Visibility.Visible)
+                    except:
+                        pass
+                
+                if _enable_gestures:
+                    # In flick/gesture mode: if menu is open or was opened by hold, release executes the hovered button, opens settings, or closes menu on empty space
+                    if was_opened_by_hold or is_win_visible:
+                        if active_win and not getattr(active_win, "customizer_mode", False):
+                            if _ui_dispatcher:
+                                from System import Action
+                                _ui_dispatcher.BeginInvoke(Action(lambda: active_win.execute_hovered_or_close(pt_x, pt_y)))
+                            else:
+                                active_win.execute_hovered_or_close(pt_x, pt_y)
+                        return 1  # Swallow RBUTTONUP
+                
+                if was_opened_by_hold or was_double_click or is_win_visible:
                     swallow = True
                 
                 if swallow:
@@ -8175,24 +9406,15 @@ def hook_callback(nCode, wParam, lParam):
                 if not _is_holding:
                     return user32.CallNextHookEx(_hook_id, nCode, wParam, lParam)
                 
-                if lParam:
+                if lParam and not _enable_gestures:
                     hook_struct = ctypes.cast(ctypes.c_void_p(lParam), ctypes.POINTER(MOUSEHOOKSTRUCT)).contents
                     curr_x = hook_struct.pt.x
                     curr_y = hook_struct.pt.y
                     dx = float(curr_x - _rbutton_down_x)
                     dy = float(curr_y - _rbutton_down_y)
-                    dist = math.sqrt(dx * dx + dy * dy)
-                    
-                    if _enable_gestures:
-                        if dist >= _gesture_threshold:
-                            _gesture_flick_detected = True
-                            item = resolve_gesture_command_at_point(_rbutton_down_x, _rbutton_down_y, curr_x, curr_y)
-                            if item:
-                                _gesture_target_item = item
-                    else:
-                        if abs(dx) > 10.0 or abs(dy) > 10.0:
-                            with _hold_lock:
-                                _is_holding = False
+                    if abs(dx) > 10.0 or abs(dy) > 10.0:
+                        with _hold_lock:
+                            _is_holding = False
     except BaseException as ex:
         try:
             tb = safe_traceback()
@@ -8237,17 +9459,20 @@ class RadialMenuManager(object):
             log_debug("Error in _on_domain_unload: " + safe_str(ex))
 
     def start(self):
-        global _hook_id, _hook_proc, _ui_dispatcher, _hold_delay_ms, _trigger_mode
+        global _hook_id, _hook_proc, _ui_dispatcher, _hold_delay_ms, _trigger_mode, _enable_gestures, _gesture_threshold
         log_debug(u"RadialMenuManager.start() called.")
         
         try:
             config = load_config()
-            _hold_delay_ms = config.get("settings", {}).get("hold_delay_ms", 400)
-            _trigger_mode = config.get("settings", {}).get("trigger_mode", "hold")
-            log_debug(u"Loaded hold delay: {}ms".format(_hold_delay_ms))
+            settings = config.get("settings", {})
+            _hold_delay_ms = settings.get("hold_delay_ms", 200)
+            _trigger_mode = settings.get("trigger_mode", "hold")
+            _enable_gestures = settings.get("enable_gestures", True)
+            _gesture_threshold = float(settings.get("gesture_threshold", 35))
+            log_debug(u"Loaded hold delay: {}ms, gestures: {}, threshold: {}".format(_hold_delay_ms, _enable_gestures, _gesture_threshold))
         except Exception as e_cfg:
             log_debug(u"Failed to load delay on start: {}".format(safe_str(e_cfg)))
-            _hold_delay_ms = 400
+            _hold_delay_ms = 200
             
         from System.Windows.Threading import Dispatcher
         self.ui_dispatcher = Dispatcher.CurrentDispatcher
