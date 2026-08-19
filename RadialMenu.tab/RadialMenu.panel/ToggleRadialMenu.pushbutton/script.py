@@ -923,16 +923,11 @@ def extract_icons_from_ribbon(force_overwrite=False, progress_callback=None, com
                 completion_callback(0, skipped_count[0], 0)
             return
 
-        chunk_size = 20
-        idx_ref = [0]
+        dispatcher = _ui_dispatcher or (System.Windows.Application.Current.Dispatcher if System.Windows.Application.Current else None)
 
-        def process_batch():
-            start_i = idx_ref[0]
-            end_i = min(start_i + chunk_size, total_to_extract)
-            last_name = ""
-            for i in range(start_i, end_i):
+        def worker():
+            for i in range(total_to_extract):
                 fpath, img, itm_name = items_queue[i]
-                last_name = itm_name
                 try:
                     if save_wpf_image_to_png(img, fpath):
                         saved_count[0] += 1
@@ -940,27 +935,38 @@ def extract_icons_from_ribbon(force_overwrite=False, progress_callback=None, com
                         failed_count[0] += 1
                 except:
                     failed_count[0] += 1
-            idx_ref[0] = end_i
 
-            if progress_callback:
-                progress_callback(end_i, total_to_extract, last_name)
+                if progress_callback and (i % 10 == 0 or i == total_to_extract - 1):
+                    cur_i = i + 1
+                    cur_name = itm_name
+                    def update_progress(ci=cur_i, cn=cur_name):
+                        progress_callback(ci, total_to_extract, cn)
+                    if dispatcher:
+                        try:
+                            dispatcher.Invoke(Action(update_progress))
+                        except:
+                            pass
 
-            if end_i < total_to_extract:
-                dispatcher = _ui_dispatcher or (System.Windows.Application.Current.Dispatcher if System.Windows.Application.Current else None)
+            global _bitmap_image_cache
+            _bitmap_image_cache.clear()
+            log_debug(u"Ribbon icon extraction complete: saved={}, skipped={}, failed={}.".format(
+                saved_count[0], skipped_count[0], failed_count[0]
+            ))
+            if completion_callback:
                 if dispatcher:
-                    dispatcher.BeginInvoke(DispatcherPriority.Background, Action(process_batch))
-            else:
-                global _bitmap_image_cache
-                _bitmap_image_cache.clear()
-                log_debug(u"Ribbon icon extraction complete: saved={}, skipped={}, failed={}.".format(
-                    saved_count[0], skipped_count[0], failed_count[0]
-                ))
-                if completion_callback:
+                    def call_done():
+                        completion_callback(saved_count[0], skipped_count[0], failed_count[0])
+                    try:
+                        dispatcher.Invoke(Action(call_done))
+                    except:
+                        completion_callback(saved_count[0], skipped_count[0], failed_count[0])
+                else:
                     completion_callback(saved_count[0], skipped_count[0], failed_count[0])
 
-        dispatcher = _ui_dispatcher or (System.Windows.Application.Current.Dispatcher if System.Windows.Application.Current else None)
-        if dispatcher:
-            dispatcher.BeginInvoke(DispatcherPriority.Background, Action(process_batch))
+        import threading
+        t = threading.Thread(target=worker)
+        t.daemon = True
+        t.start()
     except Exception as ex:
         log_debug(u"Error in extract_icons_from_ribbon: {}".format(safe_str(ex)))
         if completion_callback:
