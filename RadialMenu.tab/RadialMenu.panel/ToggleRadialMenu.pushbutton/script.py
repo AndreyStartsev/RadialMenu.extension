@@ -1718,7 +1718,19 @@ def is_element_prehighlighted():
         "готово",
         "click to select",
         "для выбора",
-        "нажмите"
+        "нажмите",
+        "bereit",
+        "klicken sie",
+        "prêt",
+        "cliquez",
+        "listo",
+        "haga clic",
+        "pronto",
+        "fare clic",
+        "選択",
+        "클릭",
+        "单击",
+        "點擊"
     ]
     for prompt in idle_prompts:
         if prompt in text_lower:
@@ -1737,7 +1749,19 @@ def get_hovered_category():
         "готово",
         "click to select",
         "для выбора",
-        "нажмите"
+        "нажмите",
+        "bereit",
+        "klicken sie",
+        "prêt",
+        "cliquez",
+        "listo",
+        "haga clic",
+        "pronto",
+        "fare clic",
+        "選択",
+        "클릭",
+        "单击",
+        "點擊"
     ]
     for prompt in idle_prompts:
         if prompt in text_lower:
@@ -6032,8 +6056,8 @@ class RadialMenuWindow(Window):
             dialog.FileName = "RadialMenu_Config.json"
             if dialog.ShowDialog() == winforms.DialogResult.OK:
                 file_path = dialog.FileName
-                with open(file_path, 'w') as f:
-                    json.dump(self._config_data, f, indent=4)
+                with open(file_path, 'wb') as f:
+                    f.write(json.dumps(self._config_data, indent=4, ensure_ascii=False).encode('utf-8'))
                 from pyrevit import forms
                 forms.toast("Configuration exported successfully.", title="Export Config")
         except Exception as ex:
@@ -6050,8 +6074,8 @@ class RadialMenuWindow(Window):
             dialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
             if dialog.ShowDialog() == winforms.DialogResult.OK:
                 file_path = dialog.FileName
-                with open(file_path, 'r') as f:
-                    new_config = json.load(f)
+                with open(file_path, 'rb') as f:
+                    new_config = json.loads(f.read().decode('utf-8'))
                 
                 # Basic validation
                 if not isinstance(new_config, dict) or "command_pool" not in new_config:

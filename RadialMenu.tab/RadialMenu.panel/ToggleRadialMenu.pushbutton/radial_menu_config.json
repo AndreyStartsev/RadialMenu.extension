@@ -1,81 +1,52 @@
 {
     "command_pool": [
         {
-            "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Sprinkler autosize", 
-            "parent": null, 
-            "context_rules": {
-                "allowed_selection_states": [], 
-                "allowed_views": [
-                    "3D", 
-                    "Plan"
-                ], 
-                "allowed_classes": []
-            }, 
-            "id": "item_1_e9b69607", 
-            "type": "pyrevit", 
-            "level": 1, 
-            "priority": 80, 
-            "name": "Sprinkler Pipe Automatic Sizing", 
-            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerautosize.dark.png"
-        }, 
-        {
-            "command": "CustomCtrl_%CustomCtrl_%ASTools%Test%Sprinkler heith", 
-            "parent": null, 
-            "context_rules": {}, 
-            "id": "item_1_fbbf1e69", 
-            "type": "pyrevit", 
-            "level": 1, 
-            "priority": 40, 
-            "name": "Sprinkler heith", 
-            "icon": "extracted_icons/CustomCtrl_CustomCtrl_ASToolsTestSprinklerheith.dark.png"
-        }, 
-        {
-            "command": "ID_MEASURE_LINE", 
-            "parent": null, 
-            "context_rules": {}, 
-            "id": "ID_MEASURE_LINE", 
-            "type": "built_in", 
-            "level": 1, 
             "priority": 10, 
+            "level": 1, 
+            "parent": null, 
+            "type": "built_in", 
             "name": "Measure Between Two References", 
-            "icon": "G:\\Other computers\\My Laptop\\SKREP\\RadialMenu.extension\\RadialMenu.tab\\RadialMenu.panel\\ToggleRadialMenu.pushbutton\\extracted_icons\\ID_MEASURE_LINE.dark.png"
+            "command": "ID_MEASURE_LINE", 
+            "icon": "extracted_icons/ID_MEASURE_LINE.dark.png", 
+            "id": "ID_MEASURE_LINE", 
+            "context_rules": {}
         }, 
         {
-            "command": "ID_MEASURE_PICK_LINES", 
-            "parent": null, 
-            "context_rules": {}, 
-            "id": "ID_MEASURE_PICK_LINES", 
-            "type": "built_in", 
-            "level": 1, 
             "priority": 20, 
+            "type": "built_in", 
+            "id": "ID_MEASURE_PICK_LINES", 
+            "command": "ID_MEASURE_PICK_LINES", 
+            "level": 1, 
+            "parent": null, 
             "name": "Measure Along an Element", 
-            "icon": "G:\\Other computers\\My Laptop\\SKREP\\RadialMenu.extension\\RadialMenu.tab\\RadialMenu.panel\\ToggleRadialMenu.pushbutton\\extracted_icons\\ID_MEASURE_PICK_LINES.dark.png"
+            "context_rules": {}, 
+            "icon": "extracted_icons/ID_MEASURE_PICK_LINES.dark.png"
         }
     ], 
     "settings": {
-        "color_scheme": "auto", 
-        "color_normal": "#F22B2B2B", 
-        "custom_icons_dir": "", 
-        "color_border": "#40FFFFFF", 
-        "color_hover_end": "#FF1D3A56", 
-        "animation_style": "fan", 
         "color_hover_start": "#FF2B5E8C", 
-        "keep_open_after_execution": true, 
-        "ring_gap": 7, 
-        "enable_gestures": false, 
-        "gap_width": 8.0, 
-        "enable_logging": false, 
-        "core_radius": 37, 
-        "l1_max_angle": 360, 
-        "l3_max_angle": 45, 
-        "petal_width": 54, 
         "petal_opacity": 95, 
-        "l2_max_angle": 60, 
-        "trigger_mode": "hold", 
         "gesture_threshold": 35, 
-        "hold_delay_ms": 250, 
+        "l1_max_angle": 360, 
+        "keep_open_after_execution": true, 
+        "animation_style": "fan", 
+        "color_scheme": "auto", 
         "theme": "pyRevit Dark", 
         "custom_config_dir": "", 
-        "use_circles": false
+        "l3_max_angle": 45, 
+        "core_radius": 37, 
+        "custom_icons_dir": "", 
+        "enable_gestures": false, 
+        "petal_width": 54, 
+        "gap_width": 8.0, 
+        "color_border": "#40FFFFFF", 
+        "hold_delay_ms": 250, 
+        "use_circles": false, 
+        "l2_max_angle": 60, 
+        "trigger_mode": "hold", 
+        "ring_gap": 7, 
+        "color_normal": "#F22B2B2B", 
+        "enable_logging": false, 
+        "color_hover_end": "#FF1D3A56"
     }
 }
