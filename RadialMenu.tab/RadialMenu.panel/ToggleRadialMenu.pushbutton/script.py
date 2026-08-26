@@ -1948,6 +1948,181 @@ except Exception as ex:
     _event_handler = None
     _ext_event = None
 
+def execute_pyrevit_command(cmd_value):
+    if not cmd_value:
+        return False
+    import re
+    import os
+    from pyrevit.loader import sessionmgr
+    
+    log_debug(u"execute_pyrevit_command called for: {}".format(cmd_value))
+    
+    # 1. Search among all loaded pyRevit commands
+    try:
+        all_cmds = list(sessionmgr.find_all_commands(cache=True))
+        clean_target = "".join(c for c in str(cmd_value).lower() if c.isalnum())
+        tokens = [w for w in re.split(r'[%_ \.]+', str(cmd_value).lower()) if len(w) > 2 and w not in ('customctrl', 'custom', 'ctrl', 'pushbutton', 'pyrevit', 'tab', 'panel')]
+        
+        target_cmd = None
+        
+        for cmd in all_cmds:
+            # 1. Check control_id (Revit Ribbon Command ID: CustomCtrl_%...)
+            c_ctrl = getattr(cmd, "control_id", None) or ""
+            if c_ctrl and (c_ctrl == cmd_value or c_ctrl.lower() == str(cmd_value).lower()):
+                target_cmd = cmd
+                break
+                
+            # 2. Check unique_id
+            c_uid = getattr(cmd, "unique_id", None) or ""
+            if c_uid and (c_uid == cmd_value or c_uid.lower() == str(cmd_value).lower()):
+                target_cmd = cmd
+                break
+                
+            # 3. Check name / bundle / type
+            c_name = getattr(cmd, "name", None) or ""
+            c_bundle = getattr(cmd, "bundle", None) or ""
+            c_type = getattr(cmd, "typename", None) or ""
+            
+            clean_ctrl = "".join(c for c in c_ctrl.lower() if c.isalnum())
+            clean_uid = "".join(c for c in c_uid.lower() if c.isalnum())
+            
+            if clean_ctrl and (clean_ctrl == clean_target or clean_ctrl in clean_target or clean_target in clean_ctrl):
+                target_cmd = cmd
+                break
+            if clean_uid and (clean_uid == clean_target or clean_uid in clean_target or clean_target in clean_uid):
+                target_cmd = cmd
+                break
+                
+            # 4. Token match
+            if tokens:
+                combined = (c_ctrl + " " + c_uid + " " + c_name + " " + c_bundle + " " + c_type).lower()
+                if all(t in combined for t in tokens):
+                    target_cmd = cmd
+                    break
+                    
+        if target_cmd:
+            log_debug(u"Found matching pyRevit command: unique_id={}, control_id={}, name={}".format(
+                getattr(target_cmd, "unique_id", ""),
+                getattr(target_cmd, "control_id", ""),
+                getattr(target_cmd, "name", "")
+            ))
+            # Primary: Execute via native compiled command type
+            if hasattr(target_cmd, "extcmd_type") and target_cmd.extcmd_type:
+                try:
+                    log_debug(u"Executing via sessionmgr.execute_command_cls(extcmd_type)")
+                    sessionmgr.execute_command_cls(target_cmd.extcmd_type)
+                    return True
+                except Exception as e_cls:
+                    log_debug(u"execute_command_cls failed: {}".format(safe_str(e_cls)))
+            # Secondary: Execute via unique_id
+            if hasattr(target_cmd, "unique_id") and target_cmd.unique_id:
+                try:
+                    log_debug(u"Executing via sessionmgr.execute_command(unique_id)")
+                    sessionmgr.execute_command(target_cmd.unique_id)
+                    return True
+                except Exception as e_uid:
+                    log_debug(u"sessionmgr.execute_command(unique_id) failed: {}".format(safe_str(e_uid)))
+            # Fallback: Execute script directly
+            script_file = getattr(target_cmd, "script", None)
+            if script_file and os.path.exists(script_file):
+                try:
+                    log_debug(u"Executing pyRevit script file directly: {}".format(script_file))
+                    execfile(script_file, {"__file__": script_file, "__name__": "__main__"})
+                    return True
+                except Exception as e_script:
+                    log_debug(u"Direct script execfile failed: {}".format(safe_str(e_script)))
+    except Exception as ex:
+        log_debug(u"Error in sessionmgr command search/execution: {}".format(safe_str(ex)))
+        
+    # 2. Try direct sessionmgr.execute_command(cmd_value) if it's likely a pyrevit command
+    if not str(cmd_value).startswith("CustomCtrl_") and not str(cmd_value).startswith("CustomCtrl%"):
+        try:
+            log_debug(u"Fallback: trying direct sessionmgr.execute_command({})".format(cmd_value))
+            sessionmgr.execute_command(cmd_value)
+            return True
+        except Exception as ex2:
+            log_debug(u"Direct sessionmgr.execute_command failed: {}".format(safe_str(ex2)))
+        
+    # 3. Fallback: Autodesk Ribbon ComponentManager
+    try:
+        from Autodesk.Windows import ComponentManager
+        ribbon = ComponentManager.Ribbon
+        if ribbon:
+            clean_target = "".join(c for c in str(cmd_value).lower() if c.isalnum())
+            
+            def search_and_exec_item(items):
+                if not items: return False
+                for item in items:
+                    i_id = getattr(item, "Id", "") or ""
+                    if i_id:
+                        clean_item_id = "".join(c for c in i_id.lower() if c.isalnum())
+                        if i_id == cmd_value or clean_item_id == clean_target or clean_item_id in clean_target or clean_target in clean_item_id:
+                            executed_click = False
+                            
+                            try:
+                                if hasattr(item, "Command") and item.Command and hasattr(item.Command, "Execute"):
+                                    log_debug(u"Executing via item.Command.Execute: {}".format(i_id))
+                                    item.Command.Execute(getattr(item, "CommandParameter", None))
+                                    executed_click = True
+                            except Exception as e_cmd:
+                                log_debug(u"item.Command.Execute error: {}".format(safe_str(e_cmd)))
+                            
+                            if not executed_click:
+                                try:
+                                    if hasattr(item, "CommandHandler") and item.CommandHandler and hasattr(item.CommandHandler, "Execute"):
+                                        log_debug(u"Executing via item.CommandHandler.Execute: {}".format(i_id))
+                                        item.CommandHandler.Execute(item)
+                                        executed_click = True
+                                except Exception as e_ch:
+                                    log_debug(u"item.CommandHandler.Execute error: {}".format(safe_str(e_ch)))
+                                
+                            if not executed_click:
+                                try:
+                                    if hasattr(item, "Execute"):
+                                        log_debug(u"Executing via item.Execute: {}".format(i_id))
+                                        item.Execute(None)
+                                        executed_click = True
+                                    elif hasattr(item, "PerformClick"):
+                                        log_debug(u"Executing via item.PerformClick: {}".format(i_id))
+                                        item.PerformClick()
+                                        executed_click = True
+                                except Exception as e_ex:
+                                    log_debug(u"item.Execute/PerformClick error: {}".format(safe_str(e_ex)))
+                                
+                            if executed_click:
+                                return True
+                                
+                    if hasattr(item, "Items"):
+                        if search_and_exec_item(item.Items): return True
+                    if hasattr(item, "Panels"):
+                        if search_and_exec_item(item.Panels): return True
+                return False
+                
+            executed = False
+            for tab in ribbon.Tabs:
+                for panel in tab.Panels:
+                    panel_items = []
+                    if hasattr(panel, "Source") and hasattr(panel.Source, "Items"):
+                        panel_items = panel.Source.Items
+                    elif hasattr(panel, "Items"):
+                        panel_items = panel.Items
+                    if search_and_exec_item(panel_items):
+                        executed = True
+                        break
+                if executed: break
+                
+            if not executed:
+                qat = getattr(ComponentManager, "QuickAccessToolBar", None)
+                if qat and hasattr(qat, "Items") and search_and_exec_item(qat.Items):
+                    executed = True
+                    
+            if executed: return True
+    except Exception as ex_cm:
+        log_debug(u"ComponentManager execution fallback failed: {}".format(safe_str(ex_cm)))
+        
+    log_debug(u"Failed to execute pyRevit / Ribbon command for value: {}".format(cmd_value))
+    return False
+
 # Revit Commands Execution Logic
 def execute_command(uiapp, cmd_type, cmd_value):
     try:
@@ -2077,28 +2252,27 @@ def execute_command(uiapp, cmd_type, cmd_value):
                     uiapp.PostCommand(cmd_id)
                     log_debug(u"Posted Revit built-in command: {}".format(cmd_to_run))
                 else:
-                    log_debug(u"Could not resolve built-in command ID for: {}".format(cmd_to_run))
-                
+                    log_debug(u"Could not resolve built-in command ID for: {}, trying execute_pyrevit_command fallback".format(cmd_to_run))
+                    if not execute_pyrevit_command(cmd_to_run):
+                        log_debug(u"Fallback execution also failed for: {}".format(cmd_to_run))
                 
         elif cmd_type == "pyrevit":
-            from pyrevit.loader import sessionmgr
-            cmd_to_run = cmd_value
-            if cmd_value:
-                parts = cmd_value.split("_")
-                cleaned_parts = [p for p in parts if "stack" not in p.lower() and "slideout" not in p.lower()]
-                cleaned_val = "_".join(cleaned_parts)
-                if cleaned_val != cmd_value:
-                    log_debug(u"Cleaned pyRevit command unique name from '{}' to '{}'".format(cmd_value, cleaned_val))
-                    cmd_to_run = cleaned_val
-            log_debug(u"Calling sessionmgr.execute_command for {}".format(cmd_to_run))
-            sessionmgr.execute_command(cmd_to_run)
+            execute_pyrevit_command(cmd_value)
             
     except Exception as ex:
         log_debug(u"Exception in execute_command (Python Exception): {}".format(safe_str(ex)))
-        forms.toast("Execution error: " + safe_str(ex), title="Radial Menu")
+        try:
+            from pyrevit import forms
+            forms.toast("Execution error: " + safe_str(ex), title="Radial Menu")
+        except:
+            pass
     except System.Exception as ex:
         log_debug(u"Exception in execute_command (CLR Exception): {}".format(safe_str(ex)))
-        forms.toast("Execution error: " + safe_str(ex), title="Radial Menu")
+        try:
+            from pyrevit import forms
+            forms.toast("Execution error: " + safe_str(ex), title="Radial Menu")
+        except:
+            pass
 
 
 class TreeItem(object):
