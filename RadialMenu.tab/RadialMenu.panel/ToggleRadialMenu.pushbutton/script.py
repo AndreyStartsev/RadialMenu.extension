@@ -31,6 +31,16 @@ try:
 except NameError:
     unicode = str
 
+try:
+    execfile
+except NameError:
+    def execfile(filepath, globals=None, locals=None):
+        if globals is None: globals = {}
+        if locals is None: locals = globals
+        with open(filepath, 'rb') as f:
+            code = compile(f.read(), filepath, 'exec')
+            exec(code, globals, locals)
+
 _IS_REVIT_DARK = False
 _IS_MENU_DARK = False
 _active_close_delegates = []
@@ -260,16 +270,25 @@ def copy_icons_from_version(src_version, dest_version=None):
 def get_effective_config_path():
     try:
         if os.path.exists(DEFAULT_CONFIG_FILE):
-            with open(DEFAULT_CONFIG_FILE, "rb") as f:
-                d = json.loads(f.read().decode("utf-8"))
-                c_dir = d.get("settings", {}).get("custom_config_dir", "").strip()
-                if c_dir:
-                    if os.path.isdir(c_dir):
-                        custom_file = os.path.join(c_dir, "radial_menu_config.json")
-                    else:
-                        custom_file = c_dir
-                    if os.path.exists(custom_file):
-                        return custom_file
+            try:
+                with open(DEFAULT_CONFIG_FILE, "rb") as f:
+                    d = json.loads(f.read().decode("utf-8"))
+                    c_dir = d.get("settings", {}).get("custom_config_dir", "").strip()
+                    if c_dir:
+                        if os.path.isdir(c_dir):
+                            custom_file = os.path.join(c_dir, "radial_menu_config.json")
+                        else:
+                            custom_file = c_dir
+                        if os.path.exists(custom_file):
+                            return custom_file
+            except:
+                pass
+        # Fallback to user AppData config if it exists (for read-only ProgramData installs)
+        appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
+        user_cfg = os.path.join(appdata, "pyRevit", "RadialMenu", "radial_menu_config.json")
+        if os.path.exists(user_cfg):
+            if not os.path.exists(DEFAULT_CONFIG_FILE) or os.path.getmtime(user_cfg) >= os.path.getmtime(DEFAULT_CONFIG_FILE):
+                return user_cfg
     except:
         pass
     return DEFAULT_CONFIG_FILE
@@ -600,11 +619,42 @@ def resolve_themed_icon(icon_path):
                     return cand_def
     return icon_path
 
+def parse_base64_image(b64_val):
+    if not b64_val or not str(b64_val).startswith("data:image"):
+        return None
+    try:
+        import base64
+        import System
+        from System import Array, Byte
+        from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption, BitmapCreateOptions
+        from System.IO import MemoryStream
+        b64_str = str(b64_val).split(",")[-1].strip()
+        py_bytes = base64.b64decode(b64_str)
+        arr = Array[Byte](bytearray(py_bytes))
+        ms = MemoryStream(arr)
+        bi = BitmapImage()
+        bi.BeginInit()
+        bi.CacheOption = BitmapCacheOption.OnLoad
+        bi.CreateOptions = BitmapCreateOptions.IgnoreImageCache
+        bi.StreamSource = ms
+        bi.EndInit()
+        try:
+            if bi.CanFreeze:
+                bi.Freeze()
+        except:
+            pass
+        return bi
+    except Exception as e:
+        log_debug(u"Failed to parse base64 image: " + safe_str(e))
+        return None
+
 _bitmap_image_cache = {}
 
 def load_bitmap_image_themed(img_path):
     if not img_path:
         return None
+    if isinstance(img_path, (str, unicode)) and img_path.startswith("data:image"):
+        return parse_base64_image(img_path)
     global _bitmap_image_cache
     try:
         abs_path = img_path
@@ -613,7 +663,7 @@ def load_bitmap_image_themed(img_path):
                 custom_icons_dir = get_effective_icons_dir()
                 ver = get_revit_version()
                 rel = abs_path[len("extracted_icons"):].lstrip("\\/")
-                # 1. Check version subfolder
+                # 1. Check version subfolder in custom icons dir
                 cand_ver = os.path.join(custom_icons_dir, ver, os.path.basename(rel))
                 if os.path.exists(cand_ver):
                     abs_path = cand_ver
@@ -623,7 +673,12 @@ def load_bitmap_image_themed(img_path):
                     if os.path.exists(cand_root):
                         abs_path = cand_root
                     else:
-                        abs_path = os.path.join(os.path.dirname(__file__), abs_path)
+                        # 3. Check version subfolder in extension dir
+                        cand_ext_ver = os.path.join(os.path.dirname(__file__), "extracted_icons", ver, os.path.basename(rel))
+                        if os.path.exists(cand_ext_ver):
+                            abs_path = cand_ext_ver
+                        else:
+                            abs_path = os.path.join(os.path.dirname(__file__), abs_path)
             else:
                 abs_path = os.path.join(os.path.dirname(__file__), abs_path)
             
@@ -644,17 +699,25 @@ def load_bitmap_image_themed(img_path):
                     return cached_bi
             
         from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption, BitmapCreateOptions
-        from System import Uri
         
         bi = BitmapImage()
         bi.BeginInit()
-        bi.UriSource = Uri(abs_path)
         bi.CacheOption = BitmapCacheOption.OnLoad
         bi.CreateOptions = BitmapCreateOptions.IgnoreImageCache
-        bi.EndInit()
+        try:
+            from System import Uri
+            bi.UriSource = Uri(abs_path)
+            bi.EndInit()
+        except:
+            from System.IO import File, MemoryStream
+            bytes_data = File.ReadAllBytes(abs_path)
+            ms = MemoryStream(bytes_data)
+            bi.StreamSource = ms
+            bi.EndInit()
         
         try:
-            bi.Freeze()
+            if bi.CanFreeze:
+                bi.Freeze()
         except:
             pass
             
@@ -682,6 +745,7 @@ def suggest_emoji_by_name(name):
         "save": u"💾", "сохранить": u"💾",
         "zoom": u"🔍", "зум": u"🔍",
         "dimension": u"📏", "размер": u"📏",
+        "measure": u"📏", "измер": u"📏",
         "delete": u"❌", "удалить": u"❌",
         "sync": u"🔄", "синхр": u"🔄",
         "text": u"🔤", "текст": u"🔤",
@@ -886,6 +950,9 @@ def extract_icons_from_ribbon(force_overwrite=False, progress_callback=None, com
                         seen_ids.add(r_id_str)
                         safe_fn = "".join([c for c in r_id_str if c.isalnum() or c in ("_", "-")]).strip()
                         if safe_fn:
+                            if len(safe_fn) > 90:
+                                import hashlib
+                                safe_fn = safe_fn[:80] + "_" + hashlib.md5(safe_fn.encode("utf-8")).hexdigest()[:8]
                             file_path = os.path.join(icons_dir, safe_fn + suffix)
                             if not force_overwrite and os.path.exists(file_path) and os.path.getsize(file_path) > 0:
                                 skipped_count[0] += 1
@@ -1603,11 +1670,30 @@ def save_config(config_data):
         _ENABLE_LOGGING = config_data.get("settings", {}).get("enable_logging", False)
         content = json.dumps(config_data, indent=4)
         
+        saved_primary = False
         # 1. Save to default base config
-        with open(DEFAULT_CONFIG_FILE, "wb") as f:
-            f.write(content.encode("utf-8"))
+        try:
+            with open(DEFAULT_CONFIG_FILE, "wb") as f:
+                f.write(content.encode("utf-8"))
+            saved_primary = True
+        except Exception as perm_ex:
+            log_debug(u"Could not write default config (possibly read-only dir): {}".format(safe_str(perm_ex)))
             
-        # 2. Save to custom config folder if configured
+        # 2. If primary save failed (e.g. read-only ProgramData), fallback to user AppData
+        if not saved_primary:
+            try:
+                appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
+                user_cfg_dir = os.path.join(appdata, "pyRevit", "RadialMenu")
+                if not os.path.exists(user_cfg_dir):
+                    os.makedirs(user_cfg_dir)
+                user_cfg_file = os.path.join(user_cfg_dir, "radial_menu_config.json")
+                with open(user_cfg_file, "wb") as f_user:
+                    f_user.write(content.encode("utf-8"))
+                log_debug(u"Saved config to fallback user AppData directory: {}".format(user_cfg_file))
+            except Exception as u_ex:
+                log_debug(u"Failed to save fallback config to user AppData: {}".format(safe_str(u_ex)))
+            
+        # 3. Save to custom config folder if configured
         custom_dir = config_data.get("settings", {}).get("custom_config_dir", "").strip()
         if custom_dir:
             try:
@@ -1620,7 +1706,7 @@ def save_config(config_data):
             except Exception as cf_ex:
                 log_debug(u"Failed to save custom config path: {}".format(safe_str(cf_ex)))
                 
-        # 3. Update cached icons dir
+        # 4. Update cached icons dir
         custom_icons = config_data.get("settings", {}).get("custom_icons_dir", "").strip()
         set_effective_icons_dir(custom_icons)
         
@@ -2724,14 +2810,13 @@ class PoolListItem(object):
         val = self._item.get("icon", "")
         if not val:
             return None
+        if isinstance(val, (str, unicode)) and val.startswith("data:image"):
+            return parse_base64_image(val) or val
         if val.lower().endswith(".png") or os.path.sep in val or "/" in val:
             try:
-                # Resolve the absolute path if needed
-                img_path = val
-                if not os.path.isabs(img_path):
-                    img_path = os.path.join(os.path.dirname(__file__), img_path)
-                if os.path.exists(img_path):
-                    return load_bitmap_image_themed(img_path)
+                res = load_bitmap_image_themed(val)
+                if res:
+                    return res
             except:
                 pass
             return None
@@ -2740,7 +2825,7 @@ class PoolListItem(object):
     @property
     def IsImageIcon(self):
         val = self._item.get("icon", "")
-        if val and (val.lower().endswith(".png") or os.path.sep in val or "/" in val):
+        if val and (val.startswith("data:image") or val.lower().endswith(".png") or os.path.sep in val or "/" in val):
             return True
         return False
 
@@ -3764,17 +3849,11 @@ class RadialMenuWindow(Window):
                         is_image = True
             
             if is_image and img_path:
-                if not os.path.isabs(img_path):
-                    img_path = os.path.join(os.path.dirname(__file__), img_path)
-                if os.path.exists(img_path):
-                    loaded_img = load_bitmap_image_themed(img_path)
-                    if loaded_img:
-                        image_element.Source = loaded_img
-                        image_element.Visibility = Visibility.Visible
-                        emoji_element.Visibility = Visibility.Collapsed
-                    else:
-                        image_element.Visibility = Visibility.Collapsed
-                        is_image = False
+                loaded_img = load_bitmap_image_themed(img_path)
+                if loaded_img:
+                    image_element.Source = loaded_img
+                    image_element.Visibility = Visibility.Visible
+                    emoji_element.Visibility = Visibility.Collapsed
                 else:
                     image_element.Visibility = Visibility.Collapsed
                     is_image = False
@@ -3782,12 +3861,12 @@ class RadialMenuWindow(Window):
             if not is_image:
                 image_element.Visibility = Visibility.Collapsed
                 
-                # Intelligent emoji fallback for built-in commands with missing/default icons
+                # Intelligent emoji fallback for commands with missing/default icons
                 display_icon = icon_value
-                if icon_type == "built_in" and (not display_icon or display_icon in [u"⚙️", u"➕", u"▶"]):
+                if not display_icon or display_icon in [u"⚙️", u"➕", u"▶"] or display_icon.lower().endswith(".png") or "/" in display_icon or "\\" in display_icon or str(display_icon).startswith("data:image"):
                     pool_item = getattr(self, "_button_to_pool_item", {}).get(btn_name)
                     item_name = pool_item.get("name") if pool_item else ""
-                    display_icon = suggest_emoji_by_name(item_name)
+                    display_icon = suggest_emoji_by_name(item_name) or u"⚙️"
                     
                 emoji_element.Text = display_icon or u"⚙️"
                 emoji_element.Visibility = Visibility.Visible
@@ -9159,7 +9238,8 @@ def find_category_by_localized_name(doc, name):
         # Direct name lookup (very fast)
         cat = doc.Settings.Categories.get_Item(name)
         if cat:
-            _LOCALIZED_CATEGORIES_CACHE[name_lower] = cat.Id.IntegerValue
+            cat_int = int(cat.Id.Value) if hasattr(cat.Id, "Value") else cat.Id.IntegerValue
+            _LOCALIZED_CATEGORIES_CACHE[name_lower] = cat_int
             return cat
     except:
         pass
@@ -9168,13 +9248,14 @@ def find_category_by_localized_name(doc, name):
         # Fallback to slower iteration and build the cache once
         for cat in doc.Settings.Categories:
             if cat.Name:
-                _LOCALIZED_CATEGORIES_CACHE[cat.Name.lower()] = cat.Id.IntegerValue
+                cat_int = int(cat.Id.Value) if hasattr(cat.Id, "Value") else cat.Id.IntegerValue
+                _LOCALIZED_CATEGORIES_CACHE[cat.Name.lower()] = cat_int
                 
         bic_id = _LOCALIZED_CATEGORIES_CACHE.get(name_lower)
         if bic_id is not None:
             from Autodesk.Revit.DB import BuiltInCategory
             import System
-            bic = System.Enum.ToObject(BuiltInCategory, bic_id)
+            bic = System.Enum.ToObject(BuiltInCategory, int(bic_id))
             return doc.Settings.Categories.get_Item(bic)
     except Exception as ex:
         log_debug("Error in find_category_by_localized_name: " + str(ex))
